@@ -1,0 +1,10 @@
+services:
+  pws:
+    build: .
+    image: plantuml-watch-server
+    container_name: plantuml-watch-server
+    volumes:
+      - ./input:/input
+      - ./output:/output
+    ports:
+      - "8080:8080"
