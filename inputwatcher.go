@@ -26,7 +26,7 @@ func watchFile(filePath string) error {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	return nil
@@ -74,7 +74,7 @@ func (iw *InputWatcher) Watch() {
 			}
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		oldFiles = iw.files
 		iw.GetFiles()

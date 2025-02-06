@@ -37,15 +37,22 @@ func server() {
 	http.HandleFunc("/output/{name}", func(w http.ResponseWriter, r *http.Request) {
 		svgName := r.PathValue("name")
 
-		svg, err := os.ReadFile(fmt.Sprintf("/output/%v.svg", svgName))
+		_, err := os.ReadFile(fmt.Sprintf("/output/%v.svg", svgName))
 		if err != nil {
 			w.WriteHeader(404)
 			w.Write([]byte("SVG not found. Error: " + err.Error()))
 			return
 		}
 
+		html, err := os.ReadFile("static/output.html")
+		if err != nil {
+			w.WriteHeader(404)
+			w.Write([]byte("HTML not found. Error: " + err.Error()))
+			return
+		}
+
 		w.Header().Add("Content-Type", "text/html")
-		w.Write(svg)
+		w.Write(html)
 	})
 
 	// Hanler function to stream updates
