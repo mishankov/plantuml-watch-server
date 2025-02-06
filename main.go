@@ -24,13 +24,12 @@ func runPlantUML(input, output string) {
 		}
 	}
 
-	log.Println(string(pumlOut))
+	if len(pumlOut) != 0 {
+		log.Println(string(pumlOut))
+	}
 }
 
-func main() {
-	// Generate initial SVGs
-	runPlantUML("/input/*.puml", "/output")
-
+func server() {
 	// Handler function to return SVGs
 	http.HandleFunc("/output/{name}", func(w http.ResponseWriter, r *http.Request) {
 		svgName := r.PathValue("name")
@@ -50,4 +49,15 @@ func main() {
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalln(err)
 	}
+}
+
+func main() {
+	// Generate initial SVGs
+	runPlantUML("/input/*.puml", "/output")
+
+	// Watch input changes
+	go (&InputWatcher{}).Watch()
+
+	// Run server
+	server()
 }
