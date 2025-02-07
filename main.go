@@ -44,19 +44,23 @@ func server() {
 		_, err := os.ReadFile(fmt.Sprintf("/output/%v.svg", svgName))
 		if err != nil {
 			w.WriteHeader(404)
-			w.Write([]byte("SVG not found. Error: " + err.Error()))
+			w.Write([]byte("Error getting SVG: " + err.Error()))
 			return
 		}
 
-		html, err := os.ReadFile("static/output.html")
+		// TODO: make template - title
+		// html, err := os.ReadFile("static/output.html")
+
+		tmplFile := "templates/output.html"
+		tmpl, err := template.ParseFiles(tmplFile)
 		if err != nil {
 			w.WriteHeader(404)
-			w.Write([]byte("HTML not found. Error: " + err.Error()))
+			w.Write([]byte("Error getting template: " + err.Error()))
 			return
 		}
 
 		w.Header().Add("Content-Type", "text/html")
-		w.Write(html)
+		tmpl.Execute(w, svgName)
 	})
 
 	// Hanler function to stream updates
@@ -70,7 +74,7 @@ func server() {
 		svg, err := os.ReadFile(svgFullPath)
 		if err != nil {
 			w.WriteHeader(404)
-			w.Write([]byte("SVG not found. Error: " + err.Error()))
+			w.Write([]byte("Error getting SVG: " + err.Error()))
 			return
 		}
 
@@ -101,6 +105,7 @@ func server() {
 		ws.WriteMessage(1, svg)
 
 		for {
+			// TODO: stop watch if context is done
 			err := watchFile(svgFullPath)
 			if err != nil {
 				log.Println(err)
