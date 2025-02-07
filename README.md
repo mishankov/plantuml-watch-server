@@ -60,7 +60,7 @@ Example `docker-compose.yml`:
 ```yaml
 services:
   plantuml-watch-server:
-    image: ghcr.io/mishankov/plantuml-watch-server:main
+    image: ghcr.io/mishankov/plantuml-watch-server:latest
     ports:
       - "8080:8080"
     volumes: 
