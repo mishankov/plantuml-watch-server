@@ -49,8 +49,8 @@ Run the container:
 docker run -d \
   --name plantuml-watch-server \
   -p 8080:8080 \
-  -v ./input:/path/to/input \
-  -v ./output:/path/to/output \
+  -v /path/to/input:/input \
+  -v /path/to/output:/output \
   ghcr.io/mishankov/plantuml-watch-server:latest
 ```
 
@@ -64,6 +64,6 @@ services:
     ports:
       - "8080:8080"
     volumes: 
-      - ./input:/path/to/input # folder with .puml files
-      - ./output:/path/to/output # [optional] folder with output SVGs
+      - /path/to/input:/input # folder with .puml files
+      - /path/to/output:/output # [optional] folder with output SVGs
 ```
