@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -112,6 +116,34 @@ func server() {
 		}
 	})
 
+	// Home handler function
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		tmplFile := "templates/home.html"
+		tmpl, err := template.ParseFiles(tmplFile)
+		if err != nil {
+			w.WriteHeader(404)
+			w.Write([]byte("Template not found. Error: " + err.Error()))
+			return
+		}
+
+		files := []string{}
+		err = filepath.Walk("/output", func(path string, info fs.FileInfo, err error) error {
+			if strings.HasSuffix(path, ".svg") {
+				files = append(files, strings.ReplaceAll(path, ".svg", ""))
+			}
+
+			return nil
+		})
+		if err != nil {
+			w.WriteHeader(404)
+			w.Write([]byte("Output not found. Error: " + err.Error()))
+			return
+		}
+
+		w.Header().Add("Content-Type", "text/html")
+		tmpl.Execute(w, files)
+	})
+
 	log.Println("http://localhost:8080/")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalln(err)
@@ -119,6 +151,9 @@ func server() {
 }
 
 func main() {
+	os.RemoveAll("/output/")
+	// os.MkdirAll("/output/", 0777)
+
 	// Generate initial SVGs
 	runPlantUML("/input/*.puml", "/output")
 

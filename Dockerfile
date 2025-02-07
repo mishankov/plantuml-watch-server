@@ -7,5 +7,6 @@ FROM plantuml/plantuml:latest
 WORKDIR /opt
 COPY --from=buildgo /app/plantuml-watch-server /opt/plantuml-watch-server
 COPY ./static /opt/static
+COPY ./templates /opt/templates
 EXPOSE 8080
 ENTRYPOINT [ "./plantuml-watch-server" ]
