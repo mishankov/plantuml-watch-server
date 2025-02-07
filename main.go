@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -14,6 +15,12 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+//go:embed static
+var staticFiles embed.FS
+
+//go:embed templates
+var templateFiles embed.FS
 
 func runPlantUML(input, output string) {
 	javaArgs := []string{"-jar", "plantuml.jar", "-o", output, "-tsvg", input}
@@ -37,6 +44,13 @@ func runPlantUML(input, output string) {
 }
 
 func server() {
+
+	// Preparing termplates
+	tmpls, err := template.New("").ParseFS(templateFiles, "templates/*.html")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// Handler function to return SVGs
 	http.HandleFunc("/output/{name}", func(w http.ResponseWriter, r *http.Request) {
 		svgName := r.PathValue("name")
@@ -48,21 +62,13 @@ func server() {
 			return
 		}
 
-		tmplFile := "templates/output.html"
-		tmpl, err := template.ParseFiles(tmplFile)
-		if err != nil {
-			w.WriteHeader(404)
-			w.Write([]byte("Error getting template: " + err.Error()))
-			return
-		}
-
 		w.Header().Add("Content-Type", "text/html")
-		tmpl.Execute(w, svgName)
+		tmpls.ExecuteTemplate(w, "output.html", svgName)
 	})
 
 	// Hanler function to stream updates
 	http.HandleFunc("/ws/{name}", func(w http.ResponseWriter, r *http.Request) {
-		_, cancel := context.WithCancel(r.Context())
+		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
 		svgName := r.PathValue("name")
@@ -102,8 +108,7 @@ func server() {
 		ws.WriteMessage(1, svg)
 
 		for {
-			// TODO: stop watch if context is done
-			err := watchFile(svgFullPath)
+			err := watchFile(ctx, svgFullPath)
 			if err != nil {
 				log.Println(err)
 				break
@@ -118,16 +123,11 @@ func server() {
 		}
 	})
 
+	// Handle function for static files
+	http.Handle("/static/{file}", http.FileServer(http.FS(staticFiles)))
+
 	// Home handler function
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		tmplFile := "templates/home.html"
-		tmpl, err := template.ParseFiles(tmplFile)
-		if err != nil {
-			w.WriteHeader(404)
-			w.Write([]byte("Template not found. Error: " + err.Error()))
-			return
-		}
-
 		files := []string{}
 		err = filepath.Walk("/output", func(path string, info fs.FileInfo, err error) error {
 			if strings.HasSuffix(path, ".svg") {
@@ -143,7 +143,7 @@ func server() {
 		}
 
 		w.Header().Add("Content-Type", "text/html")
-		tmpl.Execute(w, files)
+		tmpls.ExecuteTemplate(w, "index.html", files)
 	})
 
 	log.Println("http://localhost:8080/")
@@ -160,7 +160,7 @@ func main() {
 	runPlantUML("/input/*.puml", "/output")
 
 	// Watch input changes
-	go (&InputWatcher{}).Watch()
+	go (&InputWatcher{}).Watch(context.Background())
 
 	// Run server
 	server()

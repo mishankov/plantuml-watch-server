@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-func watchFile(filePath string) error {
+func watchFile(ctx context.Context, filePath string) error {
 	initialStat, err := os.Stat(filePath)
 	if err != nil {
 		return err
@@ -27,6 +28,12 @@ func watchFile(filePath string) error {
 		}
 
 		time.Sleep(100 * time.Millisecond)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 	}
 
 	return nil
@@ -51,7 +58,7 @@ func (iw *InputWatcher) GetFiles() {
 	}
 }
 
-func (iw *InputWatcher) Watch() {
+func (iw *InputWatcher) Watch(ctx context.Context) {
 	iw.GetFiles()
 	oldFiles := []string{}
 
@@ -61,7 +68,7 @@ func (iw *InputWatcher) Watch() {
 				log.Println("Watching new file:", file)
 				go func() {
 					for {
-						err := watchFile(file)
+						err := watchFile(ctx, file)
 						if err != nil {
 							log.Println(err)
 							break
