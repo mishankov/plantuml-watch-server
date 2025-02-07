@@ -48,9 +48,6 @@ func server() {
 			return
 		}
 
-		// TODO: make template - title
-		// html, err := os.ReadFile("static/output.html")
-
 		tmplFile := "templates/output.html"
 		tmpl, err := template.ParseFiles(tmplFile)
 		if err != nil {
