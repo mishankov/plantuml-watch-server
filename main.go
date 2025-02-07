@@ -97,7 +97,7 @@ func server() {
 		go func() {
 			for {
 				if _, _, err := ws.NextReader(); err != nil {
-					log.Println("Couldn't get NextReader:", err)
+					log.Println("WebSocket connection aborted:", err)
 					ws.Close()
 					cancel()
 					break
@@ -107,10 +107,11 @@ func server() {
 
 		ws.WriteMessage(1, svg)
 
+		log.Println("Started watching diagram:", svgFullPath)
 		for {
 			err := watchFile(ctx, svgFullPath)
 			if err != nil {
-				log.Println(err)
+				log.Println("Stopped watching diagram "+svgFullPath+":", err)
 				break
 			}
 
@@ -153,14 +154,16 @@ func server() {
 }
 
 func main() {
+	ctx := context.Background()
+
+	// Remove all stale outputs
 	os.RemoveAll("/output/")
-	// os.MkdirAll("/output/", 0777)
 
 	// Generate initial SVGs
 	runPlantUML("/input/*.puml", "/output")
 
 	// Watch input changes
-	go (&InputWatcher{}).Watch(context.Background())
+	go (&InputWatcher{}).Watch(ctx)
 
 	// Run server
 	server()

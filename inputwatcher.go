@@ -27,12 +27,10 @@ func watchFile(ctx context.Context, filePath string) error {
 			break
 		}
 
-		time.Sleep(100 * time.Millisecond)
-
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
 
@@ -70,7 +68,7 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 					for {
 						err := watchFile(ctx, file)
 						if err != nil {
-							log.Println(err)
+							log.Println("Stopped watchFile:", err)
 							break
 						}
 
@@ -81,7 +79,11 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 			}
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
 
 		oldFiles = iw.files
 		iw.GetFiles()
