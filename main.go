@@ -23,7 +23,7 @@ func main() {
 	config := config.NewFromCLIArgs()
 	puml := plantuml.New(config.PlantUMLPath)
 	iw := inputwatcher.New(config.InputFolder, puml)
-	server := server.New(staticFiles, templateFiles, config.OutputFolder)
+	server := server.New(staticFiles, templateFiles, config.OutputFolder, config.Port)
 
 	// Remove all stale outputs
 	os.RemoveAll(config.OutputFolder + "/")

@@ -19,16 +19,17 @@ type Server struct {
 	staticFS     fs.FS
 	templates    *template.Template
 	outputFolder string
+	port         int
 }
 
-func New(staticFS, templatesFS fs.FS, outputFolder string) *Server {
+func New(staticFS, templatesFS fs.FS, outputFolder string, port int) *Server {
 	// Preparing termplates
 	tmpls, err := template.New("").ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	return &Server{staticFS: staticFS, templates: tmpls, outputFolder: outputFolder}
+	return &Server{staticFS: staticFS, templates: tmpls, outputFolder: outputFolder, port: port}
 }
 
 func (s *Server) Serve() {
@@ -37,8 +38,8 @@ func (s *Server) Serve() {
 	http.Handle("/static/{file}", http.FileServer(http.FS(s.staticFS)))
 	http.HandleFunc("/", s.handleIndex)
 
-	log.Println("http://localhost:8080/")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	log.Printf("http://localhost:%v/", s.port)
+	if err := http.ListenAndServe(fmt.Sprintf("localhost:%v", s.port), nil); err != nil {
 		log.Fatalln(err)
 	}
 }
