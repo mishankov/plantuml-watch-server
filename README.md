@@ -1,6 +1,6 @@
 # PlantUML Watch Server
 
-A tool for watching source files and rendering PlantUML diagrams automatically.
+A tool for watching PlantUML source files, rendering them to SVGs and automaticaly update in a browser.
 
 ## Usage
 
