@@ -39,7 +39,7 @@ func (s *Server) Serve() {
 	http.HandleFunc("/", s.handleIndex)
 
 	log.Printf("http://localhost:%v/", s.port)
-	if err := http.ListenAndServe(fmt.Sprintf("localhost:%v", s.port), nil); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%v", s.port), nil); err != nil {
 		log.Fatalln(err)
 	}
 }
