@@ -37,7 +37,7 @@ Run the executable with the command line options below.
 
 Example:
 ```bash
-plantuml-watch-server -input="./diagrams" -output="./output" -port=8080 -verbose
+plantuml-watch-server -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080
 ```
 
 ### Docker
