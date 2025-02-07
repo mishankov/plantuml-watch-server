@@ -7,4 +7,4 @@ FROM plantuml/plantuml:latest
 WORKDIR /opt
 COPY --from=buildgo /app/plantuml-watch-server /opt/plantuml-watch-server
 EXPOSE 8080
-ENTRYPOINT [ "./plantuml-watch-server" ]
+ENTRYPOINT [ "./plantuml-watch-server", "-input=/input", "-output=/output" ]

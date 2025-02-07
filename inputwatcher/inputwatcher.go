@@ -1,4 +1,4 @@
-package main
+package inputwatcher
 
 import (
 	"context"
@@ -9,9 +9,11 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/mishankov/plantuml-watch-server/plantuml"
 )
 
-func watchFile(ctx context.Context, filePath string) error {
+func WatchFile(ctx context.Context, filePath string) error {
 	initialStat, err := os.Stat(filePath)
 	if err != nil {
 		return err
@@ -38,14 +40,19 @@ func watchFile(ctx context.Context, filePath string) error {
 }
 
 type InputWatcher struct {
-	files []string
+	inputPath string
+	pulm      *plantuml.PlantUML
 }
 
-func (iw *InputWatcher) GetFiles() {
-	iw.files = []string{}
-	err := filepath.Walk("/input", func(path string, info fs.FileInfo, err error) error {
+func New(inputPath string, pulm *plantuml.PlantUML) *InputWatcher {
+	return &InputWatcher{inputPath: inputPath, pulm: pulm}
+}
+
+func (iw *InputWatcher) GetFiles() []string {
+	files := []string{}
+	err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".puml") {
-			iw.files = append(iw.files, path)
+			files = append(files, path)
 		}
 
 		return nil
@@ -54,26 +61,28 @@ func (iw *InputWatcher) GetFiles() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	return files
 }
 
 func (iw *InputWatcher) Watch(ctx context.Context) {
-	iw.GetFiles()
+	files := iw.GetFiles()
 	oldFiles := []string{}
 
 	for {
-		for _, file := range iw.files {
+		for _, file := range files {
 			if !slices.Contains(oldFiles, file) {
 				log.Println("Watching new file:", file)
 				go func() {
 					for {
-						err := watchFile(ctx, file)
+						err := WatchFile(ctx, file)
 						if err != nil {
 							log.Println("Stopped watchFile:", err)
 							break
 						}
 
 						log.Println("File changed:", file)
-						runPlantUML(file, "/output")
+						iw.pulm.Execute(file, "/output")
 					}
 				}()
 			}
@@ -85,7 +94,7 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 		case <-time.After(100 * time.Millisecond):
 		}
 
-		oldFiles = iw.files
+		oldFiles = files
 		iw.GetFiles()
 	}
 }
