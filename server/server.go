@@ -117,7 +117,7 @@ func (s *Server) handleWSOutput(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	files := []string{}
-	err := filepath.Walk("/output", func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(s.outputFolder, func(path string, info fs.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".svg") {
 			files = append(files, strings.ReplaceAll(path, ".svg", ""))
 		}
