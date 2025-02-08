@@ -1,10 +1,12 @@
 # PlantUML Watch Server
 
-A tool for watching PlantUML source files, rendering them to SVGs and automaticaly update in a browser.
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/mishankov/plantuml-watch-server/ci.yml)](https://github.com/mishankov/plantuml-watch-server/actions/workflows/ci.yml)
+
+This tool makes it easy to see changes in PlantUML files in real-time. It watches for changes in PlantUML files in a specified directory and generates SVG files for them. The generated SVG files are updated live in the browser.
 
 ## Usage
 
-PlantUML Watch Server can be run both as a standalone executable or containerized with Docker.
+PlantUML Watch Server can be run both as a standalone executable or Docker container.
 
 ### Standalone Executable
 
@@ -29,7 +31,7 @@ Run the executable with the command line options below.
 - `-input [path]`  
   Specifies the directory to watch for PlantUML file changes. Default: `input`.
 - `-output [path]`  
-  Specifies the target directory for generated outputs. Default: /output`.
+  Specifies the target directory for generated outputs. Default: `output`.
 - `-port [number]`  
   Specifies the port number for the HTTP server. Default: `8080`.
 - `-h`  
@@ -56,7 +58,7 @@ docker run -d \
 
 #### Running with Docker Compose
 
-Example `docker-compose.yml`:
+Example `compose.yml`:
 ```yaml
 services:
   plantuml-watch-server:
@@ -67,3 +69,6 @@ services:
       - /path/to/input:/input # folder with .puml files
       - /path/to/output:/output # [optional] folder with output SVGs
 ```
+
+### Accessing the Web Interface
+Open your browser and navigate to `http://localhost:8080` (or other specified port) to see list of generated diagrams. Click on a diagram to view it. It will be updated live as you make changes to the PlantUML file.
