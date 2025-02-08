@@ -40,12 +40,13 @@ func WatchFile(ctx context.Context, filePath string) error {
 }
 
 type InputWatcher struct {
-	inputPath string
-	pulm      *plantuml.PlantUML
+	inputPath  string
+	outputPath string
+	pulm       *plantuml.PlantUML
 }
 
-func New(inputPath string, pulm *plantuml.PlantUML) *InputWatcher {
-	return &InputWatcher{inputPath: inputPath, pulm: pulm}
+func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
+	return &InputWatcher{inputPath: inputPath, outputPath: outputPath, pulm: pulm}
 }
 
 func (iw *InputWatcher) GetFiles() []string {
@@ -73,6 +74,7 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 		for _, file := range files {
 			if !slices.Contains(oldFiles, file) {
 				log.Println("Watching new file:", file)
+				iw.pulm.Execute(file, iw.outputPath)
 				go func() {
 					for {
 						err := WatchFile(ctx, file)
@@ -82,7 +84,7 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 						}
 
 						log.Println("File changed:", file)
-						iw.pulm.Execute(file, "/output")
+						iw.pulm.Execute(file, iw.outputPath)
 					}
 				}()
 			}
