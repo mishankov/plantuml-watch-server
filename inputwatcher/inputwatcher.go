@@ -95,6 +95,6 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 		}
 
 		oldFiles = files
-		iw.GetFiles()
+		files = iw.GetFiles()
 	}
 }
