@@ -1,6 +1,9 @@
 package config
 
-import "flag"
+import (
+	"flag"
+	"path/filepath"
+)
 
 type Config struct {
 	PlantUMLPath string
@@ -9,7 +12,7 @@ type Config struct {
 	Port         int
 }
 
-func NewFromCLIArgs() *Config {
+func NewFromCLIArgs() (*Config, error) {
 	plantUMLPath := flag.String("plantumlPath", "plantuml.jar", "path to plantuml.jar")
 	inputFolder := flag.String("input", "input", "input folder")
 	outputFolder := flag.String("output", "output", "output folder")
@@ -17,10 +20,20 @@ func NewFromCLIArgs() *Config {
 
 	flag.Parse()
 
+	inputFolderStr, err := filepath.Abs(*inputFolder)
+	if err != nil {
+		return nil, err
+	}
+
+	outputFolderStr, err := filepath.Abs(*outputFolder)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		PlantUMLPath: *plantUMLPath,
-		InputFolder:  *inputFolder,
-		OutputFolder: *outputFolder,
+		InputFolder:  inputFolderStr,
+		OutputFolder: outputFolderStr,
 		Port:         *port,
-	}
+	}, nil
 }

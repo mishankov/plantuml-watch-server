@@ -119,7 +119,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	files := []string{}
 	err := filepath.Walk(s.outputFolder, func(path string, info fs.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".svg") {
-			files = append(files, strings.ReplaceAll(path, ".svg", ""))
+			path = strings.ReplaceAll(path, ".svg", "")
+			path = strings.ReplaceAll(path, s.outputFolder, "")
+			path = path[1:]
+
+			files = append(files, path)
 		}
 
 		return nil

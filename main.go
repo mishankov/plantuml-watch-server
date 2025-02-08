@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"log"
 	"os"
 
 	"github.com/mishankov/plantuml-watch-server/config"
@@ -20,7 +21,11 @@ var templateFiles embed.FS
 func main() {
 	ctx := context.Background()
 
-	config := config.NewFromCLIArgs()
+	config, err := config.NewFromCLIArgs()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	puml := plantuml.New(config.PlantUMLPath)
 	iw := inputwatcher.New(config.InputFolder, config.OutputFolder, puml)
 	server := server.New(staticFiles, templateFiles, config.OutputFolder, config.Port)
