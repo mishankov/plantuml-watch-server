@@ -34,7 +34,7 @@ func main() {
 	os.RemoveAll(config.OutputFolder + "/")
 
 	// Generate initial SVGs
-	puml.Execute(config.InputFolder+"/*.puml", config.OutputFolder)
+	puml.Execute(config.InputFolder+"/**.puml", config.OutputFolder)
 
 	// Watch input changes
 	go iw.Watch(ctx)
