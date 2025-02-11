@@ -39,6 +39,27 @@ func WatchFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
+func getPUMLFiles(dirPath string) []string {
+	files := []string{}
+	err := filepath.Walk(dirPath, func(path string, info fs.FileInfo, err error) error {
+		if strings.HasSuffix(path, ".puml") {
+			files = append(files, path)
+		}
+
+		if info.IsDir() {
+			files = append(files, getPUMLFiles(path)...)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	return files
+}
+
 type InputWatcher struct {
 	inputPath  string
 	outputPath string
@@ -50,20 +71,7 @@ func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
 }
 
 func (iw *InputWatcher) GetFiles() []string {
-	files := []string{}
-	err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
-		if strings.HasSuffix(path, ".puml") {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	return files
+	return getPUMLFiles(iw.inputPath)
 }
 
 func (iw *InputWatcher) Watch(ctx context.Context) {
