@@ -106,10 +106,9 @@ func (s *Server) handleWSOutput(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		log.Println("SVG changed:", svgFullPath)
-
 		svg, _ := os.ReadFile(svgFullPath)
 		if len(svg) != 0 {
+			log.Println("SVG changed:", svgFullPath)
 			ws.WriteMessage(1, svg)
 		}
 	}
