@@ -108,6 +108,27 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 			}
 		}
 
+		// Detect deleted files and remove corresponding SVGs
+		for _, oldFile := range oldFiles {
+			if !slices.Contains(files, oldFile) {
+				log.Println("File removed:", oldFile)
+
+				// Calculate the corresponding SVG file path
+				outputDir := iw.calculateOutputDir(oldFile)
+				svgFileName := strings.TrimSuffix(filepath.Base(oldFile), ".puml") + ".svg"
+				svgPath := filepath.Join(outputDir, svgFileName)
+
+				// Remove the orphaned SVG file
+				if err := os.Remove(svgPath); err != nil {
+					if !os.IsNotExist(err) {
+						log.Printf("Failed to delete SVG %s: %v", svgPath, err)
+					}
+				} else {
+					log.Println("Deleted orphaned SVG:", svgPath)
+				}
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			return
