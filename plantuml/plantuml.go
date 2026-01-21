@@ -2,6 +2,7 @@ package plantuml
 
 import (
 	"log"
+	"os"
 	"os/exec"
 )
 
@@ -14,6 +15,12 @@ func New(jarPath string) *PlantUML {
 }
 
 func (puml *PlantUML) Execute(input, output string) {
+	// Ensure output directory exists
+	if err := os.MkdirAll(output, 0755); err != nil {
+		log.Printf("Failed to create output directory %s: %v", output, err)
+		return
+	}
+
 	javaArgs := []string{"-jar", puml.jarPath, "-o", output, "-tsvg", input}
 	pumlCmd := exec.Command("java", javaArgs...)
 
