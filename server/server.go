@@ -33,8 +33,8 @@ func New(staticFS, templatesFS fs.FS, outputFolder string, port int) *Server {
 }
 
 func (s *Server) Serve() {
-	http.HandleFunc("/output/{name}", s.handleOutput)
-	http.HandleFunc("/ws/{name}", s.handleWSOutput)
+	http.HandleFunc("/output/{name...}", s.handleOutput)
+	http.HandleFunc("/ws/{name...}", s.handleWSOutput)
 	http.Handle("/static/{file}", http.FileServer(http.FS(s.staticFS)))
 	http.HandleFunc("/", s.handleIndex)
 

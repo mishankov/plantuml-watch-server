@@ -49,6 +49,21 @@ func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
 	return &InputWatcher{inputPath: inputPath, outputPath: outputPath, pulm: pulm}
 }
 
+func (iw *InputWatcher) calculateOutputDir(inputFilePath string) string {
+	relPath, err := filepath.Rel(iw.inputPath, inputFilePath)
+	if err != nil {
+		log.Printf("Error calculating relative path for %s: %v", inputFilePath, err)
+		return iw.outputPath
+	}
+
+	relDir := filepath.Dir(relPath)
+	if relDir == "." {
+		return iw.outputPath
+	}
+
+	return filepath.Join(iw.outputPath, relDir)
+}
+
 func (iw *InputWatcher) GetFiles() []string {
 	files := []string{}
 	err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
@@ -74,19 +89,22 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 		for _, file := range files {
 			if !slices.Contains(oldFiles, file) {
 				log.Println("Watching new file:", file)
-				iw.pulm.Execute(file, iw.outputPath)
-				go func() {
+				outputDir := iw.calculateOutputDir(file)
+				iw.pulm.Execute(file, outputDir)
+
+				// Fix goroutine closure bug by passing file and outputDir as parameters
+				go func(watchedFile string, watchedOutputDir string) {
 					for {
-						err := WatchFile(ctx, file)
+						err := WatchFile(ctx, watchedFile)
 						if err != nil {
 							log.Println("Stopped watchFile:", err)
 							break
 						}
 
-						log.Println("File changed:", file)
-						iw.pulm.Execute(file, iw.outputPath)
+						log.Println("File changed:", watchedFile)
+						iw.pulm.Execute(watchedFile, watchedOutputDir)
 					}
-				}()
+				}(file, outputDir)
 			}
 		}
 
