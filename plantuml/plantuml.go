@@ -1,9 +1,11 @@
 package plantuml
 
 import (
-	"log"
+	"context"
 	"os"
 	"os/exec"
+
+	"github.com/platforma-dev/platforma/log"
 )
 
 type PlantUML struct {
@@ -14,14 +16,14 @@ func New(jarPath string) *PlantUML {
 	return &PlantUML{jarPath: jarPath}
 }
 
-func (puml *PlantUML) Execute(input, output string) {
-	puml.ExecuteWithFormat(input, output, "svg")
+func (puml *PlantUML) Execute(ctx context.Context, input, output string) {
+	puml.ExecuteWithFormat(ctx, input, output, "svg")
 }
 
-func (puml *PlantUML) ExecuteWithFormat(input, output, format string) {
+func (puml *PlantUML) ExecuteWithFormat(ctx context.Context, input, output, format string) {
 	// Ensure output directory exists
 	if err := os.MkdirAll(output, 0755); err != nil {
-		log.Printf("Failed to create output directory %s: %v", output, err)
+		log.ErrorContext(ctx, "failed to create output directory", "output", output, "error", err)
 		return
 	}
 
@@ -33,7 +35,7 @@ func (puml *PlantUML) ExecuteWithFormat(input, output, format string) {
 	case "png":
 		formatFlag = "-tpng"
 	default:
-		log.Printf("Unknown format %s, defaulting to SVG", format)
+		log.WarnContext(ctx, "unknown format, defaulting to SVG", "format", format)
 		formatFlag = "-tsvg"
 	}
 
@@ -44,15 +46,15 @@ func (puml *PlantUML) ExecuteWithFormat(input, output, format string) {
 	if err != nil {
 		switch e := err.(type) {
 		case *exec.Error:
-			log.Println("failed executing:", err)
+			log.ErrorContext(ctx, "failed executing", "error", err)
 		case *exec.ExitError:
-			log.Println("command exit rc =", e.ExitCode())
+			log.ErrorContext(ctx, "command exit", "rc", e.ExitCode())
 		default:
 			panic(err)
 		}
 	}
 
 	if len(pumlOut) != 0 {
-		log.Println(string(pumlOut))
+		log.InfoContext(ctx, "plantuml output", "output", string(pumlOut))
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"github.com/mishankov/plantuml-watch-server/plantuml"
 	"github.com/platforma-dev/platforma/application"
 	"github.com/platforma-dev/platforma/httpserver"
+	"github.com/platforma-dev/platforma/log"
 )
 
 //go:embed static
@@ -27,10 +27,10 @@ var staticFiles embed.FS
 //go:embed templates
 var templateFiles embed.FS
 
-func calculateOutputDirForFile(inputFilePath, inputRoot, outputRoot string) string {
+func calculateOutputDirForFile(ctx context.Context, inputFilePath, inputRoot, outputRoot string) string {
 	relPath, err := filepath.Rel(inputRoot, inputFilePath)
 	if err != nil {
-		log.Printf("Error calculating relative path for %s: %v", inputFilePath, err)
+		log.ErrorContext(ctx, "error calculating relative path", "path", inputFilePath, "error", err)
 		return outputRoot
 	}
 
@@ -48,7 +48,8 @@ func main() {
 
 	config, err := config.NewFromCLIArgs()
 	if err != nil {
-		log.Fatalln(err)
+		log.ErrorContext(ctx, "failed to load config", "error", err)
+		return
 	}
 
 	puml := plantuml.New(config.PlantUMLPath)
@@ -57,7 +58,8 @@ func main() {
 	// Preparing termplates
 	tmpls, err := template.New("").ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
-		log.Fatalln(err)
+		log.ErrorContext(ctx, "failed to parse templates", "error", err)
+		return
 	}
 
 	app.OnStartFunc(func(ctx context.Context) error {
@@ -77,7 +79,7 @@ func main() {
 				continue
 			}
 
-			outputDir := calculateOutputDirForFile(file, config.InputFolder, config.OutputFolder)
+			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
 			iw.ExecuteAndTrack(ctx, file, outputDir)
 		}
 		return nil
@@ -95,6 +97,6 @@ func main() {
 	app.RegisterService("server", server)
 
 	if err := app.Run(ctx); err != nil {
-		log.Fatalln(err)
+		log.InfoContext(ctx, "application exited", "error", err)
 	}
 }

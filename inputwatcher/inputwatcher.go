@@ -103,8 +103,8 @@ func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDi
 	}
 
 	// Execute PlantUML for both SVG and PNG formats
-	iw.pulm.ExecuteWithFormat(inputFile, outputDir, "svg")
-	iw.pulm.ExecuteWithFormat(inputFile, outputDir, "png")
+	iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "svg")
+	iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "png")
 
 	// Get SVG files after execution
 	svgsAfter := iw.getSvgFilesInDir(ctx, outputDir)
