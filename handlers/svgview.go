@@ -1,10 +1,11 @@
 package handlers
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 type SvgViewHandler struct {
@@ -20,9 +21,31 @@ func NewSvgViewHandler(outputFolder string, templates *template.Template) *SvgVi
 }
 
 func (h *SvgViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	svgName := r.PathValue("name")
+	svgName := filepath.Clean(r.PathValue("name"))
+	svgFullPath := filepath.Join(h.outputFolder, svgName+".svg")
 
-	_, err := os.ReadFile(fmt.Sprintf(h.outputFolder+"/%v.svg", svgName))
+	// Validate the path is within output folder
+	absOutputFolder, err := filepath.Abs(h.outputFolder)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("Internal server error"))
+		return
+	}
+
+	absFullPath, err := filepath.Abs(svgFullPath)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("Internal server error"))
+		return
+	}
+
+	if !strings.HasPrefix(absFullPath, absOutputFolder+string(filepath.Separator)) {
+		w.WriteHeader(400)
+		w.Write([]byte("Invalid path"))
+		return
+	}
+
+	_, err = os.ReadFile(svgFullPath)
 	if err != nil {
 		w.WriteHeader(404)
 		w.Write([]byte("Error getting SVG: " + err.Error()))

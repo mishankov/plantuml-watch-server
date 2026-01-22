@@ -50,7 +50,7 @@ func (puml *PlantUML) ExecuteWithFormat(ctx context.Context, input, output, form
 		case *exec.ExitError:
 			log.ErrorContext(ctx, "command exit", "rc", e.ExitCode())
 		default:
-			panic(err)
+			log.ErrorContext(ctx, "unexpected error executing plantuml", "error", err)
 		}
 	}
 

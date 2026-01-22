@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/mishankov/plantuml-watch-server/inputwatcher"
@@ -23,8 +24,29 @@ func (h *SVGWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	svgName := r.PathValue("name")
-	svgFullPath := fmt.Sprintf(h.outputFolder+"/%v.svg", svgName)
+	svgName := filepath.Clean(r.PathValue("name"))
+	svgFullPath := filepath.Join(h.outputFolder, svgName+".svg")
+
+	// Validate the path is within output folder
+	absOutputFolder, err := filepath.Abs(h.outputFolder)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("Internal server error"))
+		return
+	}
+
+	absFullPath, err := filepath.Abs(svgFullPath)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("Internal server error"))
+		return
+	}
+
+	if !strings.HasPrefix(absFullPath, absOutputFolder+string(filepath.Separator)) {
+		w.WriteHeader(400)
+		w.Write([]byte("Invalid path"))
+		return
+	}
 
 	svg, err := os.ReadFile(svgFullPath)
 	if err != nil {
