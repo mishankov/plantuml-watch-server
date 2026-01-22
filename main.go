@@ -58,7 +58,7 @@ func main() {
 
 	for _, file := range files {
 		outputDir := calculateOutputDirForFile(file, config.InputFolder, config.OutputFolder)
-		puml.Execute(file, outputDir)
+		iw.ExecuteAndTrack(file, outputDir)
 	}
 
 	// Watch input changes
