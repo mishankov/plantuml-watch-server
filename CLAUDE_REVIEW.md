@@ -1,47 +1,100 @@
 # Code Review - PlantUML Watch Server
 
-Analysis performed: 2026-01-21
+Analysis performed: 2026-01-22
+
+## Architecture Changes
+
+The codebase has undergone significant refactoring:
+- `server/server.go` has been split into separate handler files in `handlers/`
+  - `handlers/svgws.go` - WebSocket handler for live SVG updates
+  - `handlers/svgview.go` - HTML page serving for diagrams
+  - `handlers/index.go` - Index page listing all diagrams
+  - `handlers/download.go` - SVG/PNG file downloads
+- New framework: `github.com/platforma-dev/platforma` for application lifecycle
+- Context propagation added throughout the codebase
+
+---
+
+## Fixed Issues
+
+These issues from the previous review have been resolved:
+
+### 1. Goroutine Closure Bug (FIXED)
+**Previous Location**: `inputwatcher/inputwatcher.go:78-89`
+**Current Location**: `inputwatcher/inputwatcher.go:193-205`
+
+The goroutine closure bug has been fixed by passing variables as function parameters:
+```go
+go func(watchedFile string, watchedOutputDir string) {
+    for {
+        err := WatchFile(ctx, watchedFile)
+        // ...
+        iw.ExecuteAndTrack(ctx, watchedFile, watchedOutputDir)
+    }
+}(file, outputDir)
+```
+
+### 2. Application Crash on Walk Error (FIXED)
+**Previous Location**: `inputwatcher/inputwatcher.go:63`
+**Current Location**: `inputwatcher/inputwatcher.go:174-176`
+
+Now uses `log.ErrorContext` instead of `log.Fatalln`:
+```go
+if err != nil {
+    log.ErrorContext(ctx, "error getting files", "error", err)
+}
+```
+
+### 3. Ignored Callback Error in Walk (FIXED)
+**Previous Location**: `inputwatcher/inputwatcher.go:54-59`
+**Current Location**: `inputwatcher/inputwatcher.go:77-80`
+
+The `getSvgFilesInDir` callback now handles errors:
+```go
+err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
+    if err != nil {
+        return nil // Skip directories we can't access
+    }
+    // ...
+})
+```
+
+### 4. Initial File Read Error Handling (FIXED)
+**Previous Location**: Upgrade happened before file read validation
+**Current Location**: `handlers/svgws.go:29-34`
+
+Now checks if the file exists before attempting WebSocket upgrade:
+```go
+svg, err := os.ReadFile(svgFullPath)
+if err != nil {
+    w.WriteHeader(404)
+    w.Write([]byte("Error getting SVG: " + err.Error()))
+    return
+}
+```
+
+### 5. No Graceful Shutdown (FIXED)
+**Previous Location**: `main.go`
+
+The Platforma framework now handles graceful shutdown with context cancellation. The application uses `application.New()` and `app.Run(ctx)` which properly manages service lifecycle.
+
+### 6. Write After Failed Upgrade - Early Return (PARTIALLY FIXED)
+**Previous Location**: `server/server.go:82-85`
+**Current Location**: `handlers/svgws.go:42-47`
+
+The code now returns early after error, though the write to `w` after upgrade attempt is still technically invalid (see New Issues #4).
+
+---
 
 ## Critical Issues
 
-### 1. Goroutine Closure Bug (inputwatcher/inputwatcher.go:78-89)
-**Location**: `inputwatcher/inputwatcher.go:78-89`
-**Severity**: Critical
-
-The goroutine captures the loop variable `file` by reference, not by value:
-```go
-for _, file := range files {
-    if !slices.Contains(oldFiles, file) {
-        go func() {
-            for {
-                err := WatchFile(ctx, file) // BUG: 'file' captured by reference
-```
-
-**Impact**: All goroutines will watch the same file (the last file in the loop), instead of each watching their own file. This breaks the entire file watching mechanism.
-
-**Fix**: Capture the variable by value:
-```go
-go func(f string) {
-    for {
-        err := WatchFile(ctx, f)
-        if err != nil {
-            log.Println("Stopped watchFile:", err)
-            break
-        }
-        log.Println("File changed:", f)
-        iw.pulm.Execute(f, iw.outputPath)
-    }
-}(file)
-```
-
-### 2. Path Traversal Vulnerability (server/server.go:48, 65)
-**Location**: `server/server.go:48, 65`
+### 1. Path Traversal Vulnerability (handlers/svgview.go:25, handlers/svgws.go:27)
+**Location**: `handlers/svgview.go:25`, `handlers/svgws.go:27`
 **Severity**: Critical (Security)
 
 User input from `r.PathValue("name")` is used directly in file paths without sanitization:
 ```go
-svgName := r.PathValue("name")
-svgFullPath := fmt.Sprintf(s.outputFolder+"/%v.svg", svgName)
+svgFullPath := fmt.Sprintf(h.outputFolder+"/%v.svg", svgName)
 ```
 
 **Impact**: An attacker could use `../../../etc/passwd` to read arbitrary files from the filesystem.
@@ -59,10 +112,36 @@ if !strings.HasPrefix(svgFullPath, s.outputFolder) {
 }
 ```
 
+### 2. Panic on Unexpected Error (plantuml/plantuml.go:53)
+**Location**: `plantuml/plantuml.go:53`
+**Severity**: Critical
+
+The default case in the error switch panics:
+```go
+switch e := err.(type) {
+case *exec.Error:
+    log.ErrorContext(ctx, "failed executing", "error", err)
+case *exec.ExitError:
+    log.ErrorContext(ctx, "command exit", "rc", e.ExitCode())
+default:
+    panic(err)  // Crashes the entire application
+}
+```
+
+**Impact**: Any unexpected error type from command execution will crash the entire application.
+
+**Fix**: Log the error instead of panicking:
+```go
+default:
+    log.ErrorContext(ctx, "unexpected error executing plantuml", "error", err)
+```
+
+---
+
 ## High Severity Issues
 
-### 3. WebSocket CORS Bypass (server/server.go:78)
-**Location**: `server/server.go:78`
+### 3. WebSocket CORS Bypass (handlers/svgws.go:39)
+**Location**: `handlers/svgws.go:39`
 **Severity**: High (Security)
 
 ```go
@@ -80,50 +159,33 @@ var upgrader = websocket.Upgrader{
 }
 ```
 
-### 4. Goroutine Leak (inputwatcher/inputwatcher.go:69-101)
-**Location**: `inputwatcher/inputwatcher.go:69-101`
+### 4. Race Condition on fileToSvgMap (inputwatcher/inputwatcher.go)
+**Location**: `inputwatcher/inputwatcher.go:47, 142, 158, 227`
 **Severity**: High
 
-Goroutines are spawned for each file but never cleaned up. If a file is deleted and recreated, multiple goroutines will watch the same file.
+The `fileToSvgMap` field is accessed concurrently by multiple goroutines without synchronization:
+- Field definition at line 47: `fileToSvgMap map[string]map[string]bool`
+- Read access at line 142: `oldSvgs := iw.fileToSvgMap[inputFile]`
+- Write access at line 158: `iw.fileToSvgMap[inputFile] = generatedSvgs`
+- Delete access at line 227: `delete(iw.fileToSvgMap, oldFile)`
 
-**Impact**: Memory leak, wasted CPU cycles, duplicate PlantUML executions. Over time, this could accumulate hundreds of leaked goroutines.
+**Impact**: Concurrent map access causes race conditions that can lead to data corruption or runtime panics.
 
-**Fix**: Track goroutines and properly cancel them when files are deleted. Consider using a sync.WaitGroup or maintaining a map of active watchers that can be cancelled.
-
-### 5. Application Crash on Directory Walk Error (inputwatcher/inputwatcher.go:63)
-**Location**: `inputwatcher/inputwatcher.go:63`
-**Severity**: High
-
+**Fix**: Use a `sync.RWMutex` to protect map access:
 ```go
-if err != nil {
-    log.Fatalln(err) // Crashes entire application
+type InputWatcher struct {
+    // ...
+    fileToSvgMap   map[string]map[string]bool
+    fileToSvgMutex sync.RWMutex
 }
 ```
 
-**Impact**: A single filesystem error (permission denied, disk full, etc.) crashes the entire server.
-
-**Fix**: Return the error and handle it gracefully in the caller:
-```go
-func (iw *InputWatcher) GetFiles() ([]string, error) {
-    files := []string{}
-    err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-        if strings.HasSuffix(path, ".puml") {
-            files = append(files, path)
-        }
-        return nil
-    })
-
-    return files, err
-}
-```
+---
 
 ## Medium Severity Issues
 
-### 6. Ignored Error on SVG Read (server/server.go:109)
-**Location**: `server/server.go:109`
+### 5. Ignored Error on SVG Read in Loop (handlers/svgws.go:70)
+**Location**: `handlers/svgws.go:70`
 **Severity**: Medium
 
 ```go
@@ -139,19 +201,13 @@ if len(svg) != 0 {
 ```go
 svg, err := os.ReadFile(svgFullPath)
 if err != nil {
-    log.Println("Error reading SVG:", err)
+    log.ErrorContext(ctx, "Error reading SVG:", "error", err)
     break
-}
-if len(svg) != 0 {
-    if err := ws.WriteMessage(websocket.BinaryMessage, svg); err != nil {
-        log.Println("Error writing to WebSocket:", err)
-        break
-    }
 }
 ```
 
-### 7. Unchecked WebSocket Write Errors (server/server.go:99, 112)
-**Location**: `server/server.go:99, 112`
+### 6. Unchecked WebSocket Write Errors (handlers/svgws.go:60, 73)
+**Location**: `handlers/svgws.go:60, 73`
 **Severity**: Medium
 
 ```go
@@ -162,59 +218,14 @@ ws.WriteMessage(1, svg) // Error not checked
 
 **Fix**: Check write errors and break the loop:
 ```go
-if err := ws.WriteMessage(websocket.BinaryMessage, svg); err != nil {
-    log.Println("Error writing to WebSocket:", err)
+if err := ws.WriteMessage(websocket.TextMessage, svg); err != nil {
+    log.ErrorContext(ctx, "Error writing to WebSocket:", "error", err)
     break
 }
 ```
 
-### 8. Writing After Failed Upgrade (server/server.go:82-85)
-**Location**: `server/server.go:82-85`
-**Severity**: Medium
-
-```go
-ws, err := upgrader.Upgrade(w, r, nil)
-if err != nil {
-    w.WriteHeader(500) // Invalid: connection already hijacked
-    w.Write([]byte("Couldn't upgrade to WebSocker. Error: " + err.Error()))
-    return
-}
-```
-
-**Impact**: After `Upgrade()` returns an error, the connection is already hijacked, so writing to `w` is invalid and won't work. The Upgrade function handles the error response itself.
-
-**Fix**: Only log the error:
-```go
-ws, err := upgrader.Upgrade(w, r, nil)
-if err != nil {
-    log.Println("WebSocket upgrade failed:", err)
-    return
-}
-```
-
-### 9. Destructive Startup Operation (main.go:34)
-**Location**: `main.go:34`
-**Severity**: Medium
-
-```go
-os.RemoveAll(config.OutputFolder + "/")
-```
-
-**Impact**: Completely removes the output directory on every startup, destroying any manual files or data users might have placed there. This is unexpected behavior for a watch server.
-
-**Fix**: Only remove `.svg` files, or make this behavior configurable:
-```go
-// Remove only .svg files
-filepath.Walk(config.OutputFolder, func(path string, info fs.FileInfo, err error) error {
-    if err == nil && strings.HasSuffix(path, ".svg") {
-        os.Remove(path)
-    }
-    return nil
-})
-```
-
-### 10. Potential Index Out of Bounds Panic (server/server.go:123)
-**Location**: `server/server.go:123`
+### 7. Potential Index Out of Bounds Panic (handlers/index.go:26)
+**Location**: `handlers/index.go:26`
 **Severity**: Medium
 
 ```go
@@ -230,10 +241,73 @@ if len(path) > 0 {
 }
 ```
 
+### 8. Destructive Startup Operation (main.go:67)
+**Location**: `main.go:67`
+**Severity**: Medium
+
+```go
+os.RemoveAll(config.OutputFolder + "/")
+```
+
+**Impact**: Completely removes the output directory on every startup, destroying any manual files or data users might have placed there. This is unexpected behavior for a watch server.
+
+**Fix**: Only remove `.svg` and `.png` files, or make this behavior configurable:
+```go
+// Remove only generated files
+filepath.Walk(config.OutputFolder, func(path string, info fs.FileInfo, err error) error {
+    if err == nil && (strings.HasSuffix(path, ".svg") || strings.HasSuffix(path, ".png")) {
+        os.Remove(path)
+    }
+    return nil
+})
+```
+
+### 9. Goroutine Leak on File Deletion (inputwatcher/inputwatcher.go:193-205)
+**Location**: `inputwatcher/inputwatcher.go:193-205`
+**Severity**: Medium
+
+When a `.puml` file is deleted, the watcher goroutine for that file continues running indefinitely until it encounters an error (like the file not existing on the next stat call).
+
+**Impact**: While the goroutine will eventually exit when the file disappears, there's no explicit cancellation mechanism. This could lead to delayed cleanup and resource waste.
+
+**Fix**: Use a map of cancellation functions to explicitly cancel watcher goroutines when files are deleted:
+```go
+type InputWatcher struct {
+    // ...
+    watcherCancels map[string]context.CancelFunc
+}
+```
+
+### 10. Write to ResponseWriter After Upgrade Attempt (handlers/svgws.go:44-45)
+**Location**: `handlers/svgws.go:44-45`
+**Severity**: Medium
+
+```go
+ws, err := upgrader.Upgrade(w, r, nil)
+if err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte("Couldn't upgrade to WebSocker. Error: " + err.Error()))
+    return
+}
+```
+
+**Impact**: After `Upgrade()` is called, the connection may already be hijacked even if an error is returned. Writing to `w` after this is invalid and won't work properly.
+
+**Fix**: Only log the error; don't attempt to write to the ResponseWriter:
+```go
+ws, err := upgrader.Upgrade(w, r, nil)
+if err != nil {
+    log.ErrorContext(ctx, "WebSocket upgrade failed", "error", err)
+    return
+}
+```
+
+---
+
 ## Low Severity Issues
 
-### 11. Magic Numbers for WebSocket Message Types (server/server.go:99, 112)
-**Location**: `server/server.go:99, 112`
+### 11. Magic Numbers for WebSocket Message Types (handlers/svgws.go:60, 73)
+**Location**: `handlers/svgws.go:60, 73`
 **Severity**: Low
 
 ```go
@@ -244,90 +318,43 @@ ws.WriteMessage(1, svg) // Should use websocket.TextMessage or websocket.BinaryM
 
 **Fix**: Use named constants:
 ```go
-ws.WriteMessage(websocket.BinaryMessage, svg)
+ws.WriteMessage(websocket.TextMessage, svg)
 ```
 
-### 12. Ignored Callback Error in Walk (inputwatcher/inputwatcher.go:54-59)
-**Location**: `inputwatcher/inputwatcher.go:54-59`
-**Severity**: Low
-
-The callback ignores the `err` parameter from `filepath.Walk`:
-```go
-err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
-    if strings.HasSuffix(path, ".puml") {
-        files = append(files, path)
-    }
-    return nil
-})
-```
-
-**Impact**: Errors during directory traversal (permission denied, deleted files) are silently ignored, leading to incomplete file lists.
-
-**Fix**: Return the error from the callback:
-```go
-err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
-    if err != nil {
-        return err
-    }
-    if strings.HasSuffix(path, ".puml") {
-        files = append(files, path)
-    }
-    return nil
-})
-```
-
-### 13. No Graceful Shutdown
-**Location**: `main.go`
-**Severity**: Low
-
-The application doesn't handle SIGTERM/SIGINT signals for graceful shutdown.
-
-**Impact**: Goroutines are abruptly terminated on shutdown; WebSocket connections aren't closed cleanly. This can leave PlantUML processes running.
-
-**Fix**: Implement signal handling and context cancellation:
-```go
-ctx, cancel := context.WithCancel(context.Background())
-defer cancel()
-
-sigChan := make(chan os.Signal, 1)
-signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-go func() {
-    <-sigChan
-    log.Println("Shutting down gracefully...")
-    cancel()
-}()
-```
-
-### 14. Typo in Error Message (server/server.go:84)
-**Location**: `server/server.go:84`
+### 12. Typo in Error Message (handlers/svgws.go:45)
+**Location**: `handlers/svgws.go:45`
 **Severity**: Trivial
 
 ```go
 "Couldn't upgrade to WebSocker. Error: " // "WebSocker" should be "WebSocket"
 ```
 
+---
+
 ## Summary
 
-- **Critical**: 2 issues (goroutine bug, path traversal)
-- **High**: 3 issues (CORS, goroutine leak, crash on error)
-- **Medium**: 6 issues (error handling, resource management)
-- **Low**: 4 issues (code quality, maintainability)
+- **Critical**: 2 issues (path traversal, panic on error)
+- **High**: 2 issues (CORS bypass, race condition)
+- **Medium**: 6 issues (error handling, resource management, goroutine leaks)
+- **Low**: 2 issues (code quality, typo)
+
+**Fixed since last review**: 6 issues
 
 ## Recommended Priority
 
 The most urgent issues to fix are:
-1. **Goroutine closure bug** - Breaks core functionality
-2. **Path traversal vulnerability** - Security risk
-3. **CORS bypass** - Security risk
-4. **Goroutine leak** - Resource leak over time
-5. **Application crash on error** - Stability issue
+1. **Path traversal vulnerability** - Security risk allowing arbitrary file access
+2. **Panic on unexpected error** - Can crash entire application
+3. **Race condition on fileToSvgMap** - Can cause data corruption or panics
+4. **CORS bypass** - Security risk for WebSocket connections
+5. **Goroutine leak on file deletion** - Resource leak over time
 
 ## Testing Recommendations
 
-1. Add unit tests for file watching logic
+1. Add unit tests for file watching logic with concurrent access
 2. Add integration tests for WebSocket updates
 3. Test with multiple files in nested directories
 4. Test error scenarios (permission denied, disk full, missing files)
-5. Test path traversal attempts in the HTTP handlers
-6. Load test to verify goroutine cleanup
+5. Test path traversal attempts in all HTTP handlers
+6. Test concurrent file changes to verify thread safety
+7. Run with `-race` flag to detect race conditions
