@@ -3,15 +3,22 @@ package main
 import (
 	"context"
 	"embed"
-	"log"
+	"fmt"
+	"html/template"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mishankov/plantuml-watch-server/config"
+	"github.com/mishankov/plantuml-watch-server/handlers"
 	"github.com/mishankov/plantuml-watch-server/inputwatcher"
 	"github.com/mishankov/plantuml-watch-server/plantuml"
-	"github.com/mishankov/plantuml-watch-server/server"
+	"github.com/platforma-dev/platforma/application"
+	"github.com/platforma-dev/platforma/httpserver"
+	"github.com/platforma-dev/platforma/log"
 )
 
 //go:embed static
@@ -20,10 +27,10 @@ var staticFiles embed.FS
 //go:embed templates
 var templateFiles embed.FS
 
-func calculateOutputDirForFile(inputFilePath, inputRoot, outputRoot string) string {
+func calculateOutputDirForFile(ctx context.Context, inputFilePath, inputRoot, outputRoot string) string {
 	relPath, err := filepath.Rel(inputRoot, inputFilePath)
 	if err != nil {
-		log.Printf("Error calculating relative path for %s: %v", inputFilePath, err)
+		log.ErrorContext(ctx, "error calculating relative path", "path", inputFilePath, "error", err)
 		return outputRoot
 	}
 
@@ -37,39 +44,59 @@ func calculateOutputDirForFile(inputFilePath, inputRoot, outputRoot string) stri
 
 func main() {
 	ctx := context.Background()
+	app := application.New()
 
 	config, err := config.NewFromCLIArgs()
 	if err != nil {
-		log.Fatalln(err)
+		log.ErrorContext(ctx, "failed to load config", "error", err)
+		return
 	}
 
 	puml := plantuml.New(config.PlantUMLPath)
 	iw := inputwatcher.New(config.InputFolder, config.OutputFolder, puml)
-	server := server.New(staticFiles, templateFiles, config.OutputFolder, config.Port)
 
-	// Remove all stale outputs
-	os.RemoveAll(config.OutputFolder + "/")
-
-	// Generate initial SVGs - iterate through each file to preserve structure
-	inputPattern := config.InputFolder + "/**.puml"
-	files, err := filepath.Glob(inputPattern)
+	// Preparing termplates
+	tmpls, err := template.New("").ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
-		log.Fatalln("Error finding .puml files:", err)
+		log.ErrorContext(ctx, "failed to parse templates", "error", err)
+		return
 	}
 
-	for _, file := range files {
-		// Skip files prefixed with underscore
-		if strings.HasPrefix(filepath.Base(file), "_") {
-			continue
+	app.OnStartFunc(func(ctx context.Context) error {
+		// Remove all stale outputs
+		os.RemoveAll(config.OutputFolder + "/")
+
+		// Generate initial SVGs - iterate through each file to preserve structure
+		inputPattern := config.InputFolder + "/**.puml"
+		files, err := filepath.Glob(inputPattern)
+		if err != nil {
+			return fmt.Errorf("Error finding .puml files: %w", err)
 		}
 
-		outputDir := calculateOutputDirForFile(file, config.InputFolder, config.OutputFolder)
-		iw.ExecuteAndTrack(file, outputDir)
+		for _, file := range files {
+			// Skip files prefixed with underscore
+			if strings.HasPrefix(filepath.Base(file), "_") {
+				continue
+			}
+
+			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
+			iw.ExecuteAndTrack(ctx, file, outputDir)
+		}
+		return nil
+	}, application.StartupTaskConfig{Name: "initial generation", AbortOnError: true})
+
+	server := httpserver.New(strconv.Itoa(config.Port), 3*time.Second)
+
+	server.Handle("/output/{name...}", handlers.NewSvgViewHandler(config.OutputFolder, tmpls))
+	server.Handle("/ws/{name...}", handlers.NewSVGWSHandler(config.OutputFolder))
+	server.Handle("/download/{name...}", handlers.NewDownloadHandler(config.OutputFolder))
+	server.Handle("/static/{file}", http.FileServer(http.FS(staticFiles)))
+	server.Handle("/", handlers.NewIndexHandler(config.OutputFolder, tmpls))
+
+	app.RegisterService("file watcher", iw)
+	app.RegisterService("server", server)
+
+	if err := app.Run(ctx); err != nil {
+		log.InfoContext(ctx, "application exited", "error", err)
 	}
-
-	// Watch input changes
-	go iw.Watch(ctx)
-
-	// Run server
-	server.Serve()
 }
