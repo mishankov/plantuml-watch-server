@@ -58,7 +58,6 @@ func (h *SVGWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
-		CheckOrigin:     func(_ *http.Request) bool { return true },
 	}
 
 	ws, err := upgrader.Upgrade(w, r, nil)
