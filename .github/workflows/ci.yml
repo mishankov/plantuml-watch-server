@@ -12,6 +12,8 @@ env:
   REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
+  # https://github.com/orgs/community/discussions/45969#discussioncomment-5334871
+  BUILDX_NO_DEFAULT_ATTESTATIONS: 1
 
 jobs:
   build-exec:
