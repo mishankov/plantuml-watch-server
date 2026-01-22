@@ -1,19 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PlantUML Watch Server | {{ . }}</title>
-  <link rel="icon" type="image/x-icon" href="/static/plant.ico">
-</head>
-<body>
-  <div id="output"></div>
-  <script>
-    let ws = new WebSocket(`ws://localhost:8080/ws/${location.pathname.replace('/output/', '')}`);
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>PlantUML Watch Server | {{ . }}</title>
+        <link rel="icon" type="image/x-icon" href="/static/plant.ico" />
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: "Arial", sans-serif;
+            }
 
-    ws.onmessage = (event) => {
-      document.getElementById('output').innerHTML = event.data;
-    };
-  </script>
-</body>
+            .download-buttons {
+                display: flex;
+                gap: 10px;
+                padding: 20px;
+            }
+
+            .download-buttons a {
+                text-decoration: none;
+                color: #fff;
+                background-color: #2980b9;
+                padding: 10px 15px;
+                border-radius: 5px;
+                font-size: 0.9rem;
+                transition: background-color 0.2s ease;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+
+            .download-buttons a:hover {
+                background-color: #3498db;
+            }
+
+            #output {
+                padding: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="download-buttons">
+            <a href="/download/svg/{{ . }}">⬇ SVG</a>
+            <a href="/download/png/{{ . }}">⬇ PNG</a>
+        </div>
+        <div id="output"></div>
+        <script>
+            let ws = new WebSocket(
+                `ws://localhost:8080/ws/${location.pathname.replace("/output/", "")}`,
+            );
+
+            ws.onmessage = (event) => {
+                document.getElementById("output").innerHTML = event.data;
+            };
+        </script>
+    </body>
 </html>

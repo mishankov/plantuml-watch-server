@@ -35,6 +35,8 @@ func New(staticFS, templatesFS fs.FS, outputFolder string, port int) *Server {
 func (s *Server) Serve() {
 	http.HandleFunc("/output/{name...}", s.handleOutput)
 	http.HandleFunc("/ws/{name...}", s.handleWSOutput)
+	http.HandleFunc("/download/svg/{name...}", s.handleDownloadSVG)
+	http.HandleFunc("/download/png/{name...}", s.handleDownloadPNG)
 	http.Handle("/static/{file}", http.FileServer(http.FS(s.staticFS)))
 	http.HandleFunc("/", s.handleIndex)
 
@@ -112,6 +114,38 @@ func (s *Server) handleWSOutput(w http.ResponseWriter, r *http.Request) {
 			ws.WriteMessage(1, svg)
 		}
 	}
+}
+
+func (s *Server) handleDownloadSVG(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	svgPath := filepath.Join(s.outputFolder, name+".svg")
+
+	svgData, err := os.ReadFile(svgPath)
+	if err != nil {
+		w.WriteHeader(404)
+		w.Write([]byte("SVG file not found: " + err.Error()))
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.svg", filepath.Base(name)))
+	w.Write(svgData)
+}
+
+func (s *Server) handleDownloadPNG(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	pngPath := filepath.Join(s.outputFolder, name+".png")
+
+	pngData, err := os.ReadFile(pngPath)
+	if err != nil {
+		w.WriteHeader(404)
+		w.Write([]byte("PNG file not found: " + err.Error()))
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.png", filepath.Base(name)))
+	w.Write(pngData)
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
