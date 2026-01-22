@@ -157,7 +157,10 @@ func (iw *InputWatcher) GetFiles() []string {
 	files := []string{}
 	err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".puml") {
-			files = append(files, path)
+			// Skip files prefixed with underscore
+			if !strings.HasPrefix(filepath.Base(path), "_") {
+				files = append(files, path)
+			}
 		}
 
 		return nil

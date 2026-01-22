@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mishankov/plantuml-watch-server/config"
 	"github.com/mishankov/plantuml-watch-server/inputwatcher"
@@ -57,6 +58,11 @@ func main() {
 	}
 
 	for _, file := range files {
+		// Skip files prefixed with underscore
+		if strings.HasPrefix(filepath.Base(file), "_") {
+			continue
+		}
+
 		outputDir := calculateOutputDirForFile(file, config.InputFolder, config.OutputFolder)
 		iw.ExecuteAndTrack(file, outputDir)
 	}
