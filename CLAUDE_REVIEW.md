@@ -82,55 +82,46 @@ The Platforma framework now handles graceful shutdown with context cancellation.
 **Previous Location**: `server/server.go:82-85`
 **Current Location**: `handlers/svgws.go:42-47`
 
-The code now returns early after error, though the write to `w` after upgrade attempt is still technically invalid (see New Issues #4).
+The code now returns early after error, though the write to `w` after upgrade attempt is still technically invalid (see Medium Issues #10).
 
----
+### 7. WebSocket CORS Bypass (FIXED)
+**Previous Location**: `handlers/svgws.go:39`
 
-## Critical Issues
+The `CheckOrigin` override has been removed. The upgrader now uses the default same-origin policy.
 
-### 1. Path Traversal Vulnerability (handlers/svgview.go:25, handlers/svgws.go:27)
-**Location**: `handlers/svgview.go:25`, `handlers/svgws.go:27`
-**Severity**: Critical (Security)
+### 8. Race Condition on fileToSvgMap (FIXED)
+**Previous Location**: `inputwatcher/inputwatcher.go:47, 142, 158, 227`
 
-User input from `r.PathValue("name")` is used directly in file paths without sanitization:
-```go
-svgFullPath := fmt.Sprintf(h.outputFolder+"/%v.svg", svgName)
-```
+A `sync.RWMutex` has been added to protect concurrent access to `fileToSvgMap`. All read operations use `RLock()`/`RUnlock()` and all write operations use `Lock()`/`Unlock()`.
 
-**Impact**: An attacker could use `../../../etc/passwd` to read arbitrary files from the filesystem.
+### 9. Path Traversal Vulnerability (FIXED)
+**Previous Location**: `handlers/svgview.go:25`, `handlers/svgws.go:27`
+**Current Location**: `handlers/svgview.go:24-46`, `handlers/svgws.go:27-49`
 
-**Fix**: Sanitize the path using `filepath.Clean()` and validate it's within the output folder:
+Both handlers now sanitize the path using `filepath.Clean()` and `filepath.Join()`, then validate that the absolute path is within the output folder:
 ```go
 svgName := filepath.Clean(r.PathValue("name"))
-svgFullPath := filepath.Join(s.outputFolder, svgName+".svg")
+svgFullPath := filepath.Join(h.outputFolder, svgName+".svg")
 
 // Validate the path is within output folder
-if !strings.HasPrefix(svgFullPath, s.outputFolder) {
+absOutputFolder, err := filepath.Abs(h.outputFolder)
+// ... error handling ...
+
+absFullPath, err := filepath.Abs(svgFullPath)
+// ... error handling ...
+
+if !strings.HasPrefix(absFullPath, absOutputFolder+string(filepath.Separator)) {
     w.WriteHeader(400)
     w.Write([]byte("Invalid path"))
     return
 }
 ```
 
-### 2. Panic on Unexpected Error (plantuml/plantuml.go:53)
-**Location**: `plantuml/plantuml.go:53`
-**Severity**: Critical
+### 10. Panic on Unexpected Error (FIXED)
+**Previous Location**: `plantuml/plantuml.go:53`
+**Current Location**: `plantuml/plantuml.go:53`
 
-The default case in the error switch panics:
-```go
-switch e := err.(type) {
-case *exec.Error:
-    log.ErrorContext(ctx, "failed executing", "error", err)
-case *exec.ExitError:
-    log.ErrorContext(ctx, "command exit", "rc", e.ExitCode())
-default:
-    panic(err)  // Crashes the entire application
-}
-```
-
-**Impact**: Any unexpected error type from command execution will crash the entire application.
-
-**Fix**: Log the error instead of panicking:
+The default case now logs the error instead of panicking:
 ```go
 default:
     log.ErrorContext(ctx, "unexpected error executing plantuml", "error", err)
@@ -138,53 +129,9 @@ default:
 
 ---
 
-## High Severity Issues
-
-### 3. WebSocket CORS Bypass (handlers/svgws.go:39)
-**Location**: `handlers/svgws.go:39`
-**Severity**: High (Security)
-
-```go
-CheckOrigin: func(_ *http.Request) bool { return true }
-```
-
-**Impact**: Any website can connect to the WebSocket, potentially leading to CSRF attacks. Malicious websites could connect to the local server and read diagram contents.
-
-**Fix**: Implement proper origin checking or remove the CheckOrigin override to use the default (same-origin policy):
-```go
-// Remove CheckOrigin to use default same-origin policy
-var upgrader = websocket.Upgrader{
-    ReadBufferSize:  1024,
-    WriteBufferSize: 1024,
-}
-```
-
-### 4. Race Condition on fileToSvgMap (inputwatcher/inputwatcher.go)
-**Location**: `inputwatcher/inputwatcher.go:47, 142, 158, 227`
-**Severity**: High
-
-The `fileToSvgMap` field is accessed concurrently by multiple goroutines without synchronization:
-- Field definition at line 47: `fileToSvgMap map[string]map[string]bool`
-- Read access at line 142: `oldSvgs := iw.fileToSvgMap[inputFile]`
-- Write access at line 158: `iw.fileToSvgMap[inputFile] = generatedSvgs`
-- Delete access at line 227: `delete(iw.fileToSvgMap, oldFile)`
-
-**Impact**: Concurrent map access causes race conditions that can lead to data corruption or runtime panics.
-
-**Fix**: Use a `sync.RWMutex` to protect map access:
-```go
-type InputWatcher struct {
-    // ...
-    fileToSvgMap   map[string]map[string]bool
-    fileToSvgMutex sync.RWMutex
-}
-```
-
----
-
 ## Medium Severity Issues
 
-### 5. Ignored Error on SVG Read in Loop (handlers/svgws.go:70)
+### 1. Ignored Error on SVG Read in Loop (handlers/svgws.go:70)
 **Location**: `handlers/svgws.go:70`
 **Severity**: Medium
 
@@ -206,7 +153,7 @@ if err != nil {
 }
 ```
 
-### 6. Unchecked WebSocket Write Errors (handlers/svgws.go:60, 73)
+### 2. Unchecked WebSocket Write Errors (handlers/svgws.go:60, 73)
 **Location**: `handlers/svgws.go:60, 73`
 **Severity**: Medium
 
@@ -224,7 +171,7 @@ if err := ws.WriteMessage(websocket.TextMessage, svg); err != nil {
 }
 ```
 
-### 7. Potential Index Out of Bounds Panic (handlers/index.go:26)
+### 3. Potential Index Out of Bounds Panic (handlers/index.go:26)
 **Location**: `handlers/index.go:26`
 **Severity**: Medium
 
@@ -241,7 +188,7 @@ if len(path) > 0 {
 }
 ```
 
-### 8. Destructive Startup Operation (main.go:67)
+### 4. Destructive Startup Operation (main.go:67)
 **Location**: `main.go:67`
 **Severity**: Medium
 
@@ -262,7 +209,7 @@ filepath.Walk(config.OutputFolder, func(path string, info fs.FileInfo, err error
 })
 ```
 
-### 9. Goroutine Leak on File Deletion (inputwatcher/inputwatcher.go:193-205)
+### 5. Goroutine Leak on File Deletion (inputwatcher/inputwatcher.go:193-205)
 **Location**: `inputwatcher/inputwatcher.go:193-205`
 **Severity**: Medium
 
@@ -278,7 +225,7 @@ type InputWatcher struct {
 }
 ```
 
-### 10. Write to ResponseWriter After Upgrade Attempt (handlers/svgws.go:44-45)
+### 6. Write to ResponseWriter After Upgrade Attempt (handlers/svgws.go:44-45)
 **Location**: `handlers/svgws.go:44-45`
 **Severity**: Medium
 
@@ -306,7 +253,7 @@ if err != nil {
 
 ## Low Severity Issues
 
-### 11. Magic Numbers for WebSocket Message Types (handlers/svgws.go:60, 73)
+### 7. Magic Numbers for WebSocket Message Types (handlers/svgws.go:60, 73)
 **Location**: `handlers/svgws.go:60, 73`
 **Severity**: Low
 
@@ -321,7 +268,7 @@ ws.WriteMessage(1, svg) // Should use websocket.TextMessage or websocket.BinaryM
 ws.WriteMessage(websocket.TextMessage, svg)
 ```
 
-### 12. Typo in Error Message (handlers/svgws.go:45)
+### 8. Typo in Error Message (handlers/svgws.go:45)
 **Location**: `handlers/svgws.go:45`
 **Severity**: Trivial
 
@@ -333,21 +280,22 @@ ws.WriteMessage(websocket.TextMessage, svg)
 
 ## Summary
 
-- **Critical**: 2 issues (path traversal, panic on error)
-- **High**: 2 issues (CORS bypass, race condition)
+- **Critical**: 0 issues (all fixed)
+- **High**: 0 issues (all fixed)
 - **Medium**: 6 issues (error handling, resource management, goroutine leaks)
 - **Low**: 2 issues (code quality, typo)
 
-**Fixed since last review**: 6 issues
+**Fixed since last review**: 10 issues
+**Fixed in this update**: 2 critical issues (path traversal, panic on error) and 2 high severity issues (CORS bypass, race condition)
 
 ## Recommended Priority
 
-The most urgent issues to fix are:
-1. **Path traversal vulnerability** - Security risk allowing arbitrary file access
-2. **Panic on unexpected error** - Can crash entire application
-3. **Race condition on fileToSvgMap** - Can cause data corruption or panics
-4. **CORS bypass** - Security risk for WebSocket connections
-5. **Goroutine leak on file deletion** - Resource leak over time
+All critical and high severity issues have been fixed! The remaining issues to address are:
+1. **Goroutine leak on file deletion** - Resource leak over time
+2. **Unchecked WebSocket write errors** - Resource waste when clients disconnect
+3. **Destructive startup operation** - Unexpected deletion of user files
+4. **Ignored error on SVG read in loop** - WebSocket stays open but stops sending updates
+5. **Potential index out of bounds panic** - Edge case that could crash server
 
 ## Testing Recommendations
 
