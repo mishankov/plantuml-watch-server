@@ -3,7 +3,6 @@ package inputwatcher
 import (
 	"context"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mishankov/plantuml-watch-server/plantuml"
+	"github.com/platforma-dev/platforma/log"
 )
 
 func WatchFile(ctx context.Context, filePath string) error {
@@ -56,10 +56,10 @@ func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
 	}
 }
 
-func (iw *InputWatcher) calculateOutputDir(inputFilePath string) string {
+func (iw *InputWatcher) calculateOutputDir(ctx context.Context, inputFilePath string) string {
 	relPath, err := filepath.Rel(iw.inputPath, inputFilePath)
 	if err != nil {
-		log.Printf("Error calculating relative path for %s: %v", inputFilePath, err)
+		log.ErrorContext(ctx, "error calculating relative path", "path", inputFilePath, "error", err)
 		return iw.outputPath
 	}
 
@@ -72,7 +72,7 @@ func (iw *InputWatcher) calculateOutputDir(inputFilePath string) string {
 }
 
 // getSvgFilesInDir returns a map of all output files (.svg and .png) in the given directory and its subdirectories
-func (iw *InputWatcher) getSvgFilesInDir(dir string) map[string]bool {
+func (iw *InputWatcher) getSvgFilesInDir(ctx context.Context, dir string) map[string]bool {
 	outputFiles := make(map[string]bool)
 	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -84,15 +84,15 @@ func (iw *InputWatcher) getSvgFilesInDir(dir string) map[string]bool {
 		return nil
 	})
 	if err != nil {
-		log.Printf("Error scanning output files in %s: %v", dir, err)
+		log.ErrorContext(ctx, "error scanning output files", "dir", dir, "error", err)
 	}
 	return outputFiles
 }
 
 // ExecuteAndTrack executes PlantUML for a file and tracks which SVGs were generated
-func (iw *InputWatcher) ExecuteAndTrack(inputFile, outputDir string) {
+func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDir string) {
 	// Get SVG files before execution
-	svgsBefore := iw.getSvgFilesInDir(outputDir)
+	svgsBefore := iw.getSvgFilesInDir(ctx, outputDir)
 
 	// Get modification times of existing SVGs
 	mtimesBefore := make(map[string]time.Time)
@@ -107,7 +107,7 @@ func (iw *InputWatcher) ExecuteAndTrack(inputFile, outputDir string) {
 	iw.pulm.ExecuteWithFormat(inputFile, outputDir, "png")
 
 	// Get SVG files after execution
-	svgsAfter := iw.getSvgFilesInDir(outputDir)
+	svgsAfter := iw.getSvgFilesInDir(ctx, outputDir)
 
 	// Determine which SVGs were created or modified by this execution
 	generatedSvgs := make(map[string]bool)
@@ -146,10 +146,10 @@ func (iw *InputWatcher) ExecuteAndTrack(inputFile, outputDir string) {
 		if !generatedSvgs[oldSvg] {
 			if err := os.Remove(oldSvg); err != nil {
 				if !os.IsNotExist(err) {
-					log.Printf("Failed to delete orphaned output file %s: %v", oldSvg, err)
+					log.ErrorContext(ctx, "failed to delete orphaned output file", "file", oldSvg, "error", err)
 				}
 			} else {
-				log.Println("Deleted orphaned output file:", oldSvg)
+				log.InfoContext(ctx, "deleted orphaned output file", "file", oldSvg)
 			}
 		}
 	}
@@ -158,7 +158,7 @@ func (iw *InputWatcher) ExecuteAndTrack(inputFile, outputDir string) {
 	iw.fileToSvgMap[inputFile] = generatedSvgs
 }
 
-func (iw *InputWatcher) GetFiles() []string {
+func (iw *InputWatcher) GetFiles(ctx context.Context) []string {
 	files := []string{}
 	err := filepath.Walk(iw.inputPath, func(path string, info fs.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".puml") {
@@ -172,34 +172,35 @@ func (iw *InputWatcher) GetFiles() []string {
 	})
 
 	if err != nil {
-		log.Fatalln(err)
+		log.ErrorContext(ctx, "error getting files", "error", err)
 	}
 
 	return files
 }
 
-func (iw *InputWatcher) Watch(ctx context.Context) {
-	files := iw.GetFiles()
+func (iw *InputWatcher) Run(ctx context.Context) error {
+	files := iw.GetFiles(ctx)
 	oldFiles := []string{}
 
 	for {
 		for _, file := range files {
 			if !slices.Contains(oldFiles, file) {
-				log.Println("Watching new file:", file)
-				outputDir := iw.calculateOutputDir(file)
-				iw.ExecuteAndTrack(file, outputDir)
+				log.InfoContext(ctx, "watching new file", "file", file)
+				outputDir := iw.calculateOutputDir(ctx, file)
+				iw.ExecuteAndTrack(ctx, file, outputDir)
 
 				// Fix goroutine closure bug by passing file and outputDir as parameters
 				go func(watchedFile string, watchedOutputDir string) {
 					for {
 						err := WatchFile(ctx, watchedFile)
 						if err != nil {
-							log.Println("Stopped watchFile:", err)
+							log.ErrorContext(ctx, "stopped watching file", "error", err)
 							break
 						}
 
-						log.Println("File changed:", watchedFile)
-						iw.ExecuteAndTrack(watchedFile, watchedOutputDir)
+						log.InfoContext(ctx, "file changed", "file", watchedFile)
+
+						iw.ExecuteAndTrack(ctx, watchedFile, watchedOutputDir)
 					}
 				}(file, outputDir)
 			}
@@ -208,17 +209,18 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 		// Detect deleted files and remove corresponding output files
 		for _, oldFile := range oldFiles {
 			if !slices.Contains(files, oldFile) {
-				log.Println("File removed:", oldFile)
+				log.InfoContext(ctx, "file removed", "file", oldFile)
 
 				// Delete all output files that were generated by this file
 				if svgs, exists := iw.fileToSvgMap[oldFile]; exists {
 					for svgPath := range svgs {
 						if err := os.Remove(svgPath); err != nil {
 							if !os.IsNotExist(err) {
-								log.Printf("Failed to delete output file %s: %v", svgPath, err)
+								log.ErrorContext(ctx, "failed to delete output file", "file", svgPath, "error", err)
+
 							}
 						} else {
-							log.Println("Deleted orphaned output file:", svgPath)
+							log.InfoContext(ctx, "deleted orphaned output file", "file", svgPath)
 						}
 					}
 					// Remove the mapping
@@ -229,11 +231,11 @@ func (iw *InputWatcher) Watch(ctx context.Context) {
 
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-time.After(100 * time.Millisecond):
 		}
 
 		oldFiles = files
-		files = iw.GetFiles()
+		files = iw.GetFiles(ctx)
 	}
 }
