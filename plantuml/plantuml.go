@@ -15,13 +15,29 @@ func New(jarPath string) *PlantUML {
 }
 
 func (puml *PlantUML) Execute(input, output string) {
+	puml.ExecuteWithFormat(input, output, "svg")
+}
+
+func (puml *PlantUML) ExecuteWithFormat(input, output, format string) {
 	// Ensure output directory exists
 	if err := os.MkdirAll(output, 0755); err != nil {
 		log.Printf("Failed to create output directory %s: %v", output, err)
 		return
 	}
 
-	javaArgs := []string{"-jar", puml.jarPath, "-o", output, "-tsvg", input}
+	// Map format to PlantUML flag
+	var formatFlag string
+	switch format {
+	case "svg":
+		formatFlag = "-tsvg"
+	case "png":
+		formatFlag = "-tpng"
+	default:
+		log.Printf("Unknown format %s, defaulting to SVG", format)
+		formatFlag = "-tsvg"
+	}
+
+	javaArgs := []string{"-jar", puml.jarPath, "-o", output, formatFlag, input}
 	pumlCmd := exec.Command("java", javaArgs...)
 
 	pumlOut, err := pumlCmd.CombinedOutput()

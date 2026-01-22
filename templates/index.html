@@ -60,6 +60,9 @@
       padding: 10px;
       border-radius: 5px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     li:hover {
@@ -67,15 +70,34 @@
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
 
-    a {
+    .diagram-name {
       text-decoration: none;
       color: #2980b9;
       font-size: 1.1rem;
-      display: block;
+      flex: 1;
     }
 
-    a:hover {
+    .diagram-name:hover {
       color: #3498db;
+    }
+
+    .download-links {
+      display: flex;
+      gap: 10px;
+    }
+
+    .download-links a {
+      text-decoration: none;
+      color: #6c757d;
+      font-size: 0.9rem;
+      padding: 5px 10px;
+      border-radius: 3px;
+      transition: background-color 0.2s ease;
+    }
+
+    .download-links a:hover {
+      background-color: #d6d8db;
+      color: #495057;
     }
 
     /* Responsive Design */
@@ -100,7 +122,13 @@
     <p>Diagrams:</p>
     <ul>
       {{ range . }}
-        <li><a href="/output/{{ . }}" target="_blank">{{ . }}</a></li>
+        <li>
+          <a href="/output/{{ . }}" target="_blank" class="diagram-name">{{ . }}</a>
+          <div class="download-links">
+            <a href="/download/svg/{{ . }}">⬇ SVG</a>
+            <a href="/download/png/{{ . }}">⬇ PNG</a>
+          </div>
+        </li>
       {{ end }}
     </ul>
   </div>
