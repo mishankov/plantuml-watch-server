@@ -125,8 +125,8 @@
         <li>
           <a href="/output/{{ . }}" target="_blank" class="diagram-name">{{ . }}</a>
           <div class="download-links">
-            <a href="/download/svg/{{ . }}">⬇ SVG</a>
-            <a href="/download/png/{{ . }}">⬇ PNG</a>
+            <a href="/download/{{ . }}?ext=svg">⬇ SVG</a>
+            <a href="/download/{{ . }}?ext=png">⬇ PNG</a>
           </div>
         </li>
       {{ end }}
