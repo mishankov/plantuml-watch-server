@@ -54,9 +54,18 @@
       padding: 0;
     }
 
+    ul ul {
+      margin-left: 20px;
+      margin-top: 8px;
+    }
+
     li {
+      margin-bottom: 8px;
+    }
+
+    /* File item styling */
+    .file-item {
       background: #e9ecef;
-      margin-bottom: 10px;
       padding: 10px;
       border-radius: 5px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -65,9 +74,25 @@
       align-items: center;
     }
 
-    li:hover {
+    .file-item:hover {
       transform: translateY(-3px);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Folder styling */
+    .folder-item {
+      margin-bottom: 12px;
+    }
+
+    .folder-name {
+      display: block;
+      font-weight: 600;
+      color: #5a6268;
+      font-size: 1rem;
+      padding: 8px 10px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      border-left: 3px solid #6c757d;
     }
 
     .diagram-name {
@@ -113,6 +138,10 @@
       a {
         font-size: 1rem;
       }
+
+      ul ul {
+        margin-left: 12px;
+      }
     }
   </style>
 </head>
@@ -121,16 +150,35 @@
     <h1>PlantUML Watch Server</h1>
     <p>Diagrams:</p>
     <ul>
-      {{ range . }}
-        <li>
-          <a href="/output/{{ . }}" target="_blank" class="diagram-name">{{ . }}</a>
-          <div class="download-links">
-            <a href="/download/{{ . }}?ext=svg">⬇ SVG</a>
-            <a href="/download/{{ . }}?ext=png">⬇ PNG</a>
-          </div>
-        </li>
-      {{ end }}
+      {{range .}}
+        {{template "node" .}}
+      {{end}}
     </ul>
   </div>
 </body>
 </html>
+
+{{define "node"}}
+  {{if .IsFolder}}
+    <li class="folder-item">
+      <span class="folder-name">{{.Name}}</span>
+      {{if .Children}}
+        <ul>
+          {{range .Children}}
+            {{template "node" .}}
+          {{end}}
+        </ul>
+      {{end}}
+    </li>
+  {{else}}
+    <li>
+      <div class="file-item">
+        <a href="/output/{{.Path}}" target="_blank" class="diagram-name">{{.Name}}</a>
+        <div class="download-links">
+          <a href="/download/{{.Path}}?ext=svg">⬇ SVG</a>
+          <a href="/download/{{.Path}}?ext=png">⬇ PNG</a>
+        </div>
+      </div>
+    </li>
+  {{end}}
+{{end}}
