@@ -85,7 +85,8 @@
     }
 
     .folder-name {
-      display: block;
+      display: flex;
+      align-items: center;
       font-weight: 600;
       color: #5a6268;
       font-size: 1rem;
@@ -93,6 +94,29 @@
       background: #f8f9fa;
       border-radius: 5px;
       border-left: 3px solid #6c757d;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s ease;
+    }
+
+    .folder-name:hover {
+      background-color: #e9ecef;
+    }
+
+    .folder-toggle {
+      display: inline-block;
+      width: 16px;
+      margin-right: 8px;
+      font-size: 0.8rem;
+      transition: transform 0.2s ease;
+    }
+
+    .folder-item.collapsed .folder-toggle {
+      transform: rotate(-90deg);
+    }
+
+    .folder-item.collapsed > ul {
+      display: none;
     }
 
     .diagram-name {
@@ -125,6 +149,31 @@
       color: #495057;
     }
 
+    /* Button styling */
+    .button-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      background-color: #e9ecef;
+      color: #495057;
+    }
+
+    .btn:hover {
+      background-color: #d6d8db;
+    }
+
     /* Responsive Design */
     @media (max-width: 600px) {
       h1 {
@@ -149,19 +198,55 @@
   <div class="container">
     <h1>PlantUML Watch Server</h1>
     <p>Diagrams:</p>
-    <ul>
+    <ul id="diagram-list">
       {{range .}}
         {{template "node" .}}
       {{end}}
     </ul>
+    <div class="button-row">
+      <button class="btn" onclick="expandAll()">Expand all</button>
+      <button class="btn" onclick="collapseAll()">Collapse all</button>
+    </div>
   </div>
+
+  <script>
+    // Collapse all folders by default on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.folder-item').forEach(function(folder) {
+        folder.classList.add('collapsed');
+      });
+    });
+
+    // Toggle individual folder
+    function toggleFolder(element) {
+      var folderItem = element.closest('.folder-item');
+      folderItem.classList.toggle('collapsed');
+    }
+
+    // Expand all folders
+    function expandAll() {
+      document.querySelectorAll('.folder-item').forEach(function(folder) {
+        folder.classList.remove('collapsed');
+      });
+    }
+
+    // Collapse all folders
+    function collapseAll() {
+      document.querySelectorAll('.folder-item').forEach(function(folder) {
+        folder.classList.add('collapsed');
+      });
+    }
+  </script>
 </body>
 </html>
 
 {{define "node"}}
   {{if .IsFolder}}
     <li class="folder-item">
-      <span class="folder-name">{{.Name}}</span>
+      <span class="folder-name" onclick="toggleFolder(this)">
+        <span class="folder-toggle">&#9660;</span>
+        {{.Name}}
+      </span>
       {{if .Children}}
         <ul>
           {{range .Children}}
