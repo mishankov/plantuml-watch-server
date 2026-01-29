@@ -4,6 +4,32 @@
 
 This tool makes it easy to see changes in PlantUML files in real-time. It watches for changes in PlantUML files in a specified directory and generates SVG files for them. The generated SVG files are updated live in the browser.
 
+## Screenshots
+
+### Index Page
+<table>
+  <tr>
+    <td><strong>Light Theme</strong></td>
+    <td><strong>Dark Theme</strong></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/index%20light.png" alt="Index page with light theme" width="400"></td>
+    <td><img src="screenshots/index%20dark.png" alt="Index page with dark theme" width="400"></td>
+  </tr>
+</table>
+
+### Diagram View
+<table>
+  <tr>
+    <td><strong>Light Theme</strong></td>
+    <td><strong>Dark Theme</strong></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/diagram%20light.png" alt="Diagram view with light theme" width="400"></td>
+    <td><img src="screenshots/diagram%20dark.png" alt="Diagram view with dark theme" width="400"></td>
+  </tr>
+</table>
+
 ## Usage
 
 PlantUML Watch Server can be run both as a standalone executable or Docker container.
