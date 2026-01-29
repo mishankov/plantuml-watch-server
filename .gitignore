@@ -3,3 +3,4 @@ output/*
 *.exe
 build/
 plantuml-watch-server
+.DS_Store
