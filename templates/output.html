@@ -1,57 +1,747 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PlantUML Watch Server | {{ . }}</title>
-        <link rel="icon" type="image/x-icon" href="/static/plant.ico" />
-        <style>
-            body {
-                margin: 0;
-                padding: 0;
-                font-family: "Arial", sans-serif;
-            }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ . }} | PlantUML Watch</title>
+  <link rel="icon" type="image/x-icon" href="/static/plant.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #f7f9fc;
+      --bg-grid: rgba(99, 132, 181, 0.06);
+      --bg-card: #ffffff;
+      --bg-card-hover: #f0f4fa;
+      --bg-elevated: #e8eef6;
+      --text-primary: #1a2744;
+      --text-secondary: #4a5d7a;
+      --text-muted: #7b8ba3;
+      --accent: #2563eb;
+      --accent-glow: rgba(37, 99, 235, 0.15);
+      --accent-secondary: #06b6d4;
+      --border: rgba(99, 132, 181, 0.2);
+      --border-strong: rgba(37, 99, 235, 0.4);
+      --shadow-sm: 0 1px 2px rgba(26, 39, 68, 0.04);
+      --shadow-md: 0 4px 12px rgba(26, 39, 68, 0.08);
+      --shadow-lg: 0 8px 32px rgba(26, 39, 68, 0.12);
+      --grid-color: rgba(99, 132, 181, 0.08);
+      --success: #10b981;
+      --error: #ef4444;
+    }
 
-            .download-buttons {
-                display: flex;
-                gap: 10px;
-                padding: 20px;
-            }
+    [data-theme="dark"] {
+      --bg-base: #0c1222;
+      --bg-grid: rgba(56, 189, 248, 0.03);
+      --bg-card: #151d2e;
+      --bg-card-hover: #1c2840;
+      --bg-elevated: #1e293b;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.12);
+      --accent-secondary: #22d3ee;
+      --border: rgba(56, 189, 248, 0.15);
+      --border-strong: rgba(56, 189, 248, 0.4);
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --grid-color: rgba(56, 189, 248, 0.04);
+      --success: #34d399;
+      --error: #f87171;
+    }
 
-            .download-buttons a {
-                text-decoration: none;
-                color: #fff;
-                background-color: #2980b9;
-                padding: 10px 15px;
-                border-radius: 5px;
-                font-size: 0.9rem;
-                transition: background-color 0.2s ease;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-            .download-buttons a:hover {
-                background-color: #3498db;
-            }
+    html, body {
+      height: 100%;
+    }
 
-            #output {
-                padding: 20px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="download-buttons">
-            <a href="/download/{{ . }}?ext=svg">⬇ SVG</a>
-            <a href="/download/{{ . }}?ext=png">⬇ PNG</a>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.4s ease, color 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+      animation: gridShift 20s linear infinite;
+    }
+
+    @keyframes gridShift {
+      0% { background-position: 0 0; }
+      100% { background-position: 40px 40px; }
+    }
+
+    /* Header toolbar */
+    .toolbar {
+      position: relative;
+      z-index: 100;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-md);
+      transition: background-color 0.4s ease, border-color 0.4s ease;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .back-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: translateX(-2px);
+    }
+
+    .back-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .diagram-info {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .diagram-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .diagram-subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 2px;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-decoration: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      transition: all 0.25s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .download-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .download-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .theme-toggle {
+      width: 40px;
+      height: 40px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      transition: all 0.25s ease;
+    }
+
+    .theme-toggle:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: rotate(15deg);
+    }
+
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Main content area */
+    .main-content {
+      flex: 1;
+      position: relative;
+      z-index: 1;
+      padding: 32px;
+      overflow: auto;
+    }
+
+    /* Diagram container with corner accents */
+    .diagram-frame {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      animation: frameReveal 0.5s ease-out;
+      margin: auto;
+      width: fit-content;
+    }
+
+    @keyframes frameReveal {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    /* Corner accents */
+    .diagram-frame::before,
+    .diagram-frame::after {
+      content: '';
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-color: var(--accent);
+      border-style: solid;
+      opacity: 0.5;
+      transition: opacity 0.3s ease;
+    }
+
+    .diagram-frame:hover::before,
+    .diagram-frame:hover::after {
+      opacity: 1;
+    }
+
+    .diagram-frame::before {
+      top: 8px;
+      left: 8px;
+      border-width: 2px 0 0 2px;
+    }
+
+    .diagram-frame::after {
+      top: 8px;
+      right: 8px;
+      border-width: 2px 2px 0 0;
+    }
+
+    .corner-bl,
+    .corner-br {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-color: var(--accent);
+      border-style: solid;
+      opacity: 0.5;
+      transition: opacity 0.3s ease;
+    }
+
+    .diagram-frame:hover .corner-bl,
+    .diagram-frame:hover .corner-br {
+      opacity: 1;
+    }
+
+    .corner-bl {
+      bottom: 8px;
+      left: 8px;
+      border-width: 0 0 2px 2px;
+    }
+
+    .corner-br {
+      bottom: 8px;
+      right: 8px;
+      border-width: 0 2px 2px 0;
+    }
+
+    #output {
+      padding: 24px;
+      min-width: 200px;
+      min-height: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #output svg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Loading state */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 40px;
+    }
+
+    .spinner-ring {
+      width: 48px;
+      height: 48px;
+      position: relative;
+    }
+
+    .spinner-ring::before,
+    .spinner-ring::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid transparent;
+    }
+
+    .spinner-ring::before {
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+    }
+
+    .spinner-ring::after {
+      border-right-color: var(--accent-secondary);
+      animation: spin 1.5s linear infinite reverse;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* Status indicator */
+    .status-badge {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 12px 18px;
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+      transition: all 0.3s ease;
+      animation: badgeSlideIn 0.4s ease-out 0.3s both;
+    }
+
+    @keyframes badgeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--success);
+      position: relative;
+    }
+
+    .status-indicator::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      background: var(--success);
+      opacity: 0.3;
+      animation: statusPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { transform: scale(1); opacity: 0.3; }
+      50% { transform: scale(1.5); opacity: 0; }
+    }
+
+    .status-badge.disconnected .status-indicator {
+      background: var(--error);
+    }
+
+    .status-badge.disconnected .status-indicator::before {
+      background: var(--error);
+      animation: none;
+    }
+
+    .status-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Zoom controls */
+    .zoom-controls {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 100;
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+      box-shadow: var(--shadow-lg);
+      animation: badgeSlideIn 0.4s ease-out 0.4s both;
+    }
+
+    .zoom-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .zoom-btn:hover {
+      background: var(--bg-elevated);
+      color: var(--accent);
+    }
+
+    .zoom-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .zoom-level {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 50px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .toolbar {
+        padding: 10px 16px;
+      }
+
+      .diagram-title {
+        font-size: 0.85rem;
+      }
+
+      .download-btn span {
+        display: none;
+      }
+
+      .download-btn {
+        padding: 10px;
+      }
+
+      .main-content {
+        padding: 16px;
+      }
+
+      #output {
+        padding: 16px;
+      }
+
+      .status-badge {
+        bottom: 16px;
+        right: 16px;
+        padding: 10px 14px;
+      }
+
+      .zoom-controls {
+        bottom: 16px;
+        left: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <a href="/" class="back-btn" title="Back to diagrams">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+      </a>
+      <div class="diagram-info">
+        <h1 class="diagram-title">{{ . }}</h1>
+        <p class="diagram-subtitle">Live Preview</p>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <a href="/download/{{ . }}?ext=svg" class="download-btn" title="Download SVG">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span>SVG</span>
+      </a>
+      <a href="/download/{{ . }}?ext=png" class="download-btn" title="Download PNG">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span>PNG</span>
+      </a>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="diagram-frame" id="diagram-frame">
+      <span class="corner-bl"></span>
+      <span class="corner-br"></span>
+      <div id="output">
+        <div class="loading">
+          <div class="spinner-ring"></div>
+          <span class="loading-text">Loading diagram</span>
         </div>
-        <div id="output"></div>
-        <script>
-            let ws = new WebSocket(
-                `ws://localhost:8080/ws/${location.pathname.replace("/output/", "")}`,
-            );
+      </div>
+    </div>
+  </main>
 
-            ws.onmessage = (event) => {
-                document.getElementById("output").innerHTML = event.data;
-            };
-        </script>
-    </body>
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+      </svg>
+    </button>
+    <span class="zoom-level" id="zoom-level">100%</span>
+    <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+    </button>
+    <button class="zoom-btn" onclick="zoomReset()" title="Reset zoom">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="status-badge" id="status">
+    <span class="status-indicator"></span>
+    <span class="status-text">Connected</span>
+  </div>
+
+  <script>
+    // Theme management
+    function getPreferredTheme() {
+      const stored = localStorage.getItem('theme');
+      if (stored) return stored;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      updateThemeToggle(theme);
+    }
+
+    function updateThemeToggle(theme) {
+      const sunIcon = document.querySelector('.sun-icon');
+      const moonIcon = document.querySelector('.moon-icon');
+
+      if (theme === 'dark') {
+        sunIcon.style.display = 'none';
+        moonIcon.style.display = 'block';
+      } else {
+        sunIcon.style.display = 'block';
+        moonIcon.style.display = 'none';
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    }
+
+    setTheme(getPreferredTheme());
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      if (!localStorage.getItem('theme')) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    });
+
+    // Zoom controls
+    let currentZoom = 100;
+    const zoomStep = 25;
+    const minZoom = 25;
+    const maxZoom = 300;
+
+    function updateZoom() {
+      const frame = document.getElementById('diagram-frame');
+      frame.style.zoom = currentZoom / 100;
+      document.getElementById('zoom-level').textContent = currentZoom + '%';
+    }
+
+    function zoomIn() {
+      if (currentZoom < maxZoom) {
+        currentZoom += zoomStep;
+        updateZoom();
+      }
+    }
+
+    function zoomOut() {
+      if (currentZoom > minZoom) {
+        currentZoom -= zoomStep;
+        updateZoom();
+      }
+    }
+
+    function zoomReset() {
+      currentZoom = 100;
+      updateZoom();
+    }
+
+    // WebSocket connection
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${location.host}/ws/${location.pathname.replace("/output/", "")}`;
+    let ws;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        updateStatus(true);
+      };
+
+      ws.onmessage = (event) => {
+        document.getElementById('output').innerHTML = event.data;
+      };
+
+      ws.onclose = () => {
+        updateStatus(false);
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          setTimeout(connect, 1000 * Math.min(reconnectAttempts, 5));
+        }
+      };
+
+      ws.onerror = () => {
+        updateStatus(false);
+      };
+    }
+
+    function updateStatus(connected) {
+      const status = document.getElementById('status');
+      const text = status.querySelector('.status-text');
+
+      if (connected) {
+        status.classList.remove('disconnected');
+        text.textContent = 'Connected';
+      } else {
+        status.classList.add('disconnected');
+        text.textContent = 'Reconnecting';
+      }
+    }
+
+    connect();
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '+' || e.key === '=') zoomIn();
+      if (e.key === '-') zoomOut();
+      if (e.key === '0') zoomReset();
+    });
+  </script>
+</body>
 </html>
