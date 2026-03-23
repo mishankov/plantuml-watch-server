@@ -13,6 +13,11 @@ type SvgViewHandler struct {
 	templates    *template.Template
 }
 
+type SvgViewData struct {
+	Diagram string
+	Tree    []*FileNode
+}
+
 func NewSvgViewHandler(outputFolder string, templates *template.Template) *SvgViewHandler {
 	return &SvgViewHandler{
 		outputFolder: outputFolder,
@@ -48,7 +53,23 @@ func (h *SvgViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := renderHTMLTemplate(w, h.templates, "output.html", svgName); err != nil {
+	files, err := collectSVGFiles(h.outputFolder)
+	if err != nil {
+		if os.IsNotExist(err) {
+			renderErrorPage(w, r, h.templates, http.StatusNotFound, "The requested diagram could not be found.")
+			return
+		}
+
+		renderErrorPage(w, r, h.templates, http.StatusInternalServerError, "Unable to load the diagrams list.")
+		return
+	}
+
+	data := SvgViewData{
+		Diagram: svgName,
+		Tree:    buildFileTree(files, svgName),
+	}
+
+	if err := renderHTMLTemplate(w, h.templates, "output.html", data); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
