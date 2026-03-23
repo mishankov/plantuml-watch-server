@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -27,8 +28,29 @@ func NewIndexHandler(outputFolder string, templates *template.Template) *IndexHa
 }
 
 func (h *IndexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		renderErrorPage(w, r, h.templates, http.StatusNotFound, "The page you requested was not found.")
+		return
+	}
+
+	if _, err := os.Stat(h.outputFolder); err != nil {
+		if os.IsNotExist(err) {
+			if err := renderHTMLTemplate(w, h.templates, "index.html", []*FileNode{}); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		renderErrorPage(w, r, h.templates, http.StatusInternalServerError, "Unable to load the diagrams list.")
+		return
+	}
+
 	files := []string{}
 	err := filepath.Walk(h.outputFolder, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
 		if strings.HasSuffix(path, ".svg") {
 			path = strings.ReplaceAll(path, ".svg", "")
 			path = strings.ReplaceAll(path, h.outputFolder, "")
@@ -40,16 +62,23 @@ func (h *IndexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		w.WriteHeader(404)
-		w.Write([]byte("Output not found. Error: " + err.Error()))
+		if os.IsNotExist(err) {
+			if err := renderHTMLTemplate(w, h.templates, "index.html", []*FileNode{}); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		renderErrorPage(w, r, h.templates, http.StatusInternalServerError, "Unable to load the diagrams list.")
 		return
 	}
 
 	// Build the file tree from flat list
 	root := buildFileTree(files)
 
-	w.Header().Add("Content-Type", "text/html")
-	h.templates.ExecuteTemplate(w, "index.html", root)
+	if err := renderHTMLTemplate(w, h.templates, "index.html", root); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 // buildFileTree converts a flat list of file paths into a hierarchical tree

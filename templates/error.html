@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{ .StatusCode }} | PlantUML Watch</title>
+        <link rel="icon" type="image/x-icon" href="/static/plant.ico" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <script>
+            (function () {
+                const theme =
+                    localStorage.getItem("theme") ||
+                    (window.matchMedia("(prefers-color-scheme: dark)").matches
+                        ? "dark"
+                        : "light");
+                document.documentElement.setAttribute("data-theme", theme);
+            })();
+        </script>
+        <style>
+            :root {
+                --bg-base: #f7f9fc;
+                --bg-grid: rgba(99, 132, 181, 0.06);
+                --bg-card: rgba(255, 255, 255, 0.92);
+                --bg-card-hover: #f0f4fa;
+                --bg-elevated: #e8eef6;
+                --text-primary: #1a2744;
+                --text-secondary: #4a5d7a;
+                --text-muted: #7b8ba3;
+                --accent: #2563eb;
+                --accent-secondary: #06b6d4;
+                --border: rgba(99, 132, 181, 0.2);
+                --shadow-lg: 0 20px 48px rgba(26, 39, 68, 0.16);
+                --grid-color: rgba(99, 132, 181, 0.08);
+                --status-bg: rgba(37, 99, 235, 0.08);
+            }
+
+            [data-theme="dark"] {
+                --bg-base: #0c1222;
+                --bg-grid: rgba(56, 189, 248, 0.03);
+                --bg-card: rgba(21, 29, 46, 0.92);
+                --bg-card-hover: #1c2840;
+                --bg-elevated: #1e293b;
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+                --text-muted: #64748b;
+                --accent: #38bdf8;
+                --accent-secondary: #22d3ee;
+                --border: rgba(56, 189, 248, 0.15);
+                --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.38);
+                --grid-color: rgba(56, 189, 248, 0.04);
+                --status-bg: rgba(56, 189, 248, 0.12);
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                min-height: 100vh;
+                font-family:
+                    "Plus Jakarta Sans",
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    sans-serif;
+                color: var(--text-primary);
+                background:
+                    radial-gradient(circle at top, rgba(37, 99, 235, 0.12), transparent 35%),
+                    var(--bg-base);
+                position: relative;
+                overflow: hidden;
+            }
+
+            body::before {
+                content: "";
+                position: fixed;
+                inset: 0;
+                background-image:
+                    linear-gradient(var(--grid-color) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+                background-size: 40px 40px;
+                pointer-events: none;
+                animation: gridShift 20s linear infinite;
+            }
+
+            @keyframes gridShift {
+                from {
+                    background-position: 0 0;
+                }
+                to {
+                    background-position: 40px 40px;
+                }
+            }
+
+            .shell {
+                position: relative;
+                z-index: 1;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+            }
+
+            .panel {
+                width: min(720px, 100%);
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 24px;
+                box-shadow: var(--shadow-lg);
+                backdrop-filter: blur(16px);
+                padding: 32px;
+                position: relative;
+            }
+
+            .toolbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 16px;
+                margin-bottom: 32px;
+            }
+
+            .brand {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .brand-title {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.85rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-muted);
+            }
+
+            .status-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 14px;
+                border-radius: 999px;
+                background: var(--status-bg);
+                color: var(--accent);
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.85rem;
+                font-weight: 600;
+            }
+
+            .status-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: currentColor;
+                box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 18%, transparent);
+            }
+
+            .theme-toggle {
+                width: 42px;
+                height: 42px;
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                background: var(--bg-elevated);
+                color: var(--text-secondary);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.25s ease;
+            }
+
+            .theme-toggle:hover {
+                color: var(--accent);
+                border-color: var(--accent);
+                transform: rotate(12deg);
+            }
+
+            .theme-toggle svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .content {
+                display: grid;
+                gap: 20px;
+            }
+
+            .headline {
+                display: grid;
+                gap: 12px;
+            }
+
+            .title {
+                font-size: clamp(2rem, 5vw, 3.6rem);
+                line-height: 0.95;
+                letter-spacing: -0.04em;
+            }
+
+            .message {
+                max-width: 36rem;
+                color: var(--text-secondary);
+                font-size: 1rem;
+            }
+
+            .details {
+                display: grid;
+                gap: 12px;
+                padding: 20px;
+                border-radius: 18px;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border);
+            }
+
+            .details-label {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.75rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-muted);
+            }
+
+            .details-path {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.95rem;
+                word-break: break-word;
+            }
+
+            .actions {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-top: 8px;
+            }
+
+            .primary-action {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 14px 18px;
+                border-radius: 14px;
+                border: 1px solid transparent;
+                background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+                color: white;
+                text-decoration: none;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.85rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                transition: transform 0.25s ease;
+            }
+
+            .primary-action:hover {
+                transform: translateY(-2px);
+            }
+
+            .secondary-action {
+                display: inline-flex;
+                align-items: center;
+                padding: 14px 18px;
+                border-radius: 14px;
+                border: 1px solid var(--border);
+                background: transparent;
+                color: var(--text-secondary);
+                text-decoration: none;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.85rem;
+                font-weight: 500;
+            }
+
+            @media (max-width: 640px) {
+                .panel {
+                    padding: 24px;
+                }
+
+                .toolbar {
+                    align-items: flex-start;
+                }
+
+                .actions {
+                    flex-direction: column;
+                }
+
+                .primary-action,
+                .secondary-action {
+                    justify-content: center;
+                    width: 100%;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="shell">
+            <section class="panel">
+                <div class="toolbar">
+                    <div class="brand">
+                        <span class="brand-title">PlantUML Watch Server</span>
+                        <div class="status-chip">
+                            <span class="status-dot"></span>
+                            <span>{{ .StatusCode }}</span>
+                        </div>
+                    </div>
+                    <button
+                        class="theme-toggle"
+                        onclick="toggleTheme()"
+                        aria-label="Toggle theme"
+                    >
+                        <svg
+                            class="sun-icon"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                            />
+                        </svg>
+                        <svg
+                            class="moon-icon"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            style="display: none"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                            />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="content">
+                    <div class="headline">
+                        <h1 class="title">{{ .Title }}</h1>
+                        <p class="message">{{ .Message }}</p>
+                    </div>
+
+                    <div class="details">
+                        <span class="details-label">Requested path</span>
+                        <code class="details-path">{{ .RequestPath }}</code>
+                    </div>
+
+                    <div class="actions">
+                        <a href="{{ .HomeURL }}" class="primary-action">
+                            Home
+                        </a>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <script>
+            function getPreferredTheme() {
+                const stored = localStorage.getItem("theme");
+                if (stored) return stored;
+                return window.matchMedia("(prefers-color-scheme: dark)").matches
+                    ? "dark"
+                    : "light";
+            }
+
+            function setTheme(theme) {
+                document.documentElement.setAttribute("data-theme", theme);
+                localStorage.setItem("theme", theme);
+                updateThemeToggle(theme);
+            }
+
+            function updateThemeToggle(theme) {
+                const sunIcon = document.querySelector(".sun-icon");
+                const moonIcon = document.querySelector(".moon-icon");
+
+                if (theme === "dark") {
+                    sunIcon.style.display = "none";
+                    moonIcon.style.display = "block";
+                } else {
+                    sunIcon.style.display = "block";
+                    moonIcon.style.display = "none";
+                }
+            }
+
+            function toggleTheme() {
+                const current =
+                    document.documentElement.getAttribute("data-theme") ||
+                    "light";
+                setTheme(current === "dark" ? "light" : "dark");
+            }
+
+            setTheme(getPreferredTheme());
+
+            window
+                .matchMedia("(prefers-color-scheme: dark)")
+                .addEventListener("change", (e) => {
+                    if (!localStorage.getItem("theme")) {
+                        setTheme(e.matches ? "dark" : "light");
+                    }
+                });
+        </script>
+    </body>
+</html>
