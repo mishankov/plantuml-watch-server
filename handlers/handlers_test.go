@@ -56,7 +56,7 @@ func TestServerRendersNotFoundPageForUnknownRoute(t *testing.T) {
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", response.StatusCode)
 	}
-	assertHTMLBodyContains(t, body, "Not found", "Diagrams list", "/missing", "The page you requested was not found.")
+	assertHTMLBodyContains(t, body, "Not found", "Home", "/missing", "The page you requested was not found.")
 }
 
 func TestServerRendersNotFoundPageForMissingDiagram(t *testing.T) {
@@ -74,7 +74,7 @@ func TestServerRendersNotFoundPageForMissingDiagram(t *testing.T) {
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", response.StatusCode)
 	}
-	assertHTMLBodyContains(t, body, "Not found", "Diagrams list", "/output/does-not-exist", "The requested diagram could not be found.")
+	assertHTMLBodyContains(t, body, "Not found", "Home", "/output/does-not-exist", "The requested diagram could not be found.")
 }
 
 func TestSvgViewHandlerRejectsInvalidPathWithErrorPage(t *testing.T) {

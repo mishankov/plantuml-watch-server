@@ -11,8 +11,7 @@ type ErrorPageData struct {
 	Title       string
 	Message     string
 	RequestPath string
-	BackURL     string
-	BackLabel   string
+	HomeURL     string
 }
 
 func renderHTMLTemplate(w http.ResponseWriter, templates *template.Template, name string, data any) error {
@@ -32,8 +31,7 @@ func renderErrorPage(w http.ResponseWriter, r *http.Request, templates *template
 		Title:       errorPageTitle(statusCode),
 		Message:     message,
 		RequestPath: r.URL.Path,
-		BackURL:     "/",
-		BackLabel:   "Diagrams list",
+		HomeURL:     "/",
 	}
 
 	var rendered bytes.Buffer
