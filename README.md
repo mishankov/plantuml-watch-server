@@ -2,7 +2,7 @@
 
 [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/mishankov/plantuml-watch-server/ci.yml)](https://github.com/mishankov/plantuml-watch-server/actions/workflows/ci.yml)
 
-This tool makes it easy to see changes in PlantUML files in real-time. It watches for changes in PlantUML files in a specified directory and generates SVG files for them. The generated SVG files are updated live in the browser.
+This tool makes it easy to see changes in PlantUML files in real-time. It watches for changes in PlantUML files in a specified directory and generates SVG and PNG files for them. The generated SVG files are updated live in the browser.
 
 ## Screenshots
 
@@ -60,12 +60,14 @@ Run the executable with the command line options below.
   Specifies the target directory for generated outputs. Default: `output`.
 - `-port [number]`  
   Specifies the port number for the HTTP server. Default: `8080`.
+- `-parallelism [number]`  
+  Specifies the maximum number of diagrams rendered concurrently. Default: the number of CPU cores.
 - `-h`  
   Prints the help message.
 
 Example:
 ```bash
-plantuml-watch-server -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080
+plantuml-watch-server -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080 -parallelism=4
 ```
 
 ### Docker

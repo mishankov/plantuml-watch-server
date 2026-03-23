@@ -2,6 +2,7 @@ package inputwatcher
 
 import (
 	"context"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,9 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mishankov/plantuml-watch-server/plantuml"
 	"github.com/platforma-dev/platforma/log"
 )
+
+type Renderer interface {
+	Render(ctx context.Context, input, output string)
+}
 
 func WatchFile(ctx context.Context, filePath string) error {
 	initialStat, err := os.Stat(filePath)
@@ -41,20 +45,30 @@ func WatchFile(ctx context.Context, filePath string) error {
 }
 
 type InputWatcher struct {
-	inputPath  string
-	outputPath string
-	pulm       *plantuml.PlantUML
+	inputPath     string
+	outputPath    string
+	renderer      Renderer
+	renderSlots   chan struct{}
+	pollInterval  time.Duration
+	watchFileFunc func(ctx context.Context, filePath string) error
 	// Maps .puml file path to the set of output files (.svg and .png) it generated
 	fileToSvgMap   map[string]map[string]bool
 	fileToSvgMutex sync.RWMutex
 }
 
-func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
+func New(inputPath, outputPath string, renderer Renderer, parallelism int) *InputWatcher {
+	if parallelism < 1 {
+		parallelism = 1
+	}
+
 	return &InputWatcher{
-		inputPath:    inputPath,
-		outputPath:   outputPath,
-		pulm:         pulm,
-		fileToSvgMap: make(map[string]map[string]bool),
+		inputPath:     inputPath,
+		outputPath:    outputPath,
+		renderer:      renderer,
+		renderSlots:   make(chan struct{}, parallelism),
+		pollInterval:  100 * time.Millisecond,
+		watchFileFunc: WatchFile,
+		fileToSvgMap:  make(map[string]map[string]bool),
 	}
 }
 
@@ -73,8 +87,7 @@ func (iw *InputWatcher) calculateOutputDir(ctx context.Context, inputFilePath st
 	return filepath.Join(iw.outputPath, relDir)
 }
 
-// getSvgFilesInDir returns a map of all output files (.svg and .png) in the given directory and its subdirectories
-func (iw *InputWatcher) getSvgFilesInDir(ctx context.Context, dir string) map[string]bool {
+func (iw *InputWatcher) getOutputFilesInDir(ctx context.Context, dir string) map[string]bool {
 	outputFiles := make(map[string]bool)
 	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -91,52 +104,133 @@ func (iw *InputWatcher) getSvgFilesInDir(ctx context.Context, dir string) map[st
 	return outputFiles
 }
 
-// ExecuteAndTrack executes PlantUML for a file and tracks which SVGs were generated
-func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDir string) {
-	// Get SVG files before execution
-	svgsBefore := iw.getSvgFilesInDir(ctx, outputDir)
+func (iw *InputWatcher) acquireRenderSlot(ctx context.Context) bool {
+	select {
+	case iw.renderSlots <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
 
-	// Get modification times of existing SVGs
-	mtimesBefore := make(map[string]time.Time)
-	for svgPath := range svgsBefore {
-		if info, err := os.Stat(svgPath); err == nil {
-			mtimesBefore[svgPath] = info.ModTime()
-		}
+func (iw *InputWatcher) releaseRenderSlot() {
+	<-iw.renderSlots
+}
+
+func (iw *InputWatcher) RenderFiles(ctx context.Context, files []string) {
+	var wg sync.WaitGroup
+
+	for _, file := range files {
+		outputDir := iw.calculateOutputDir(ctx, file)
+
+		wg.Add(1)
+		go func(filePath string, renderOutputDir string) {
+			defer wg.Done()
+			iw.ExecuteAndTrack(ctx, filePath, renderOutputDir)
+		}(file, outputDir)
 	}
 
-	// Execute PlantUML for both SVG and PNG formats
-	iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "svg")
-	iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "png")
+	wg.Wait()
+}
 
-	// Get SVG files after execution
-	svgsAfter := iw.getSvgFilesInDir(ctx, outputDir)
+func moveFile(src, dst string) error {
+	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 
-	// Determine which SVGs were created or modified by this execution
-	generatedSvgs := make(map[string]bool)
-	for svgPath := range svgsAfter {
-		// New file or modified file
-		if !svgsBefore[svgPath] {
-			generatedSvgs[svgPath] = true
-		} else if info, err := os.Stat(svgPath); err == nil {
-			if beforeTime, exists := mtimesBefore[svgPath]; exists {
-				if info.ModTime().After(beforeTime) {
-					generatedSvgs[svgPath] = true
-				}
-			}
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	target, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(target, source); err != nil {
+		target.Close()
+		return err
+	}
+
+	if err := target.Close(); err != nil {
+		return err
+	}
+
+	return os.Remove(src)
+}
+
+// ExecuteAndTrack executes PlantUML for a file and tracks which outputs were generated.
+func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDir string) {
+	if !iw.acquireRenderSlot(ctx) {
+		return
+	}
+	defer iw.releaseRenderSlot()
+
+	parentDir := filepath.Dir(outputDir)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		log.ErrorContext(ctx, "failed to prepare output parent directory", "dir", parentDir, "error", err)
+		return
+	}
+
+	tempDir, err := os.MkdirTemp(parentDir, ".render-*")
+	if err != nil {
+		log.ErrorContext(ctx, "failed to create temporary render directory", "dir", parentDir, "error", err)
+		return
+	}
+	defer os.RemoveAll(tempDir)
+
+	iw.renderer.Render(ctx, inputFile, tempDir)
+
+	tempOutputs := iw.getOutputFilesInDir(ctx, tempDir)
+	generatedOutputs := make(map[string]bool)
+
+	for tempPath := range tempOutputs {
+		relPath, err := filepath.Rel(tempDir, tempPath)
+		if err != nil {
+			log.ErrorContext(ctx, "failed to calculate rendered file path", "file", tempPath, "error", err)
+			continue
 		}
+
+		finalPath := filepath.Join(outputDir, relPath)
+		if err := os.MkdirAll(filepath.Dir(finalPath), 0755); err != nil {
+			log.ErrorContext(ctx, "failed to prepare output directory", "dir", filepath.Dir(finalPath), "error", err)
+			continue
+		}
+
+		if err := moveFile(tempPath, finalPath); err != nil {
+			log.ErrorContext(ctx, "failed to move rendered output", "src", tempPath, "dst", finalPath, "error", err)
+			continue
+		}
+
+		generatedOutputs[finalPath] = true
 	}
 
 	// If no output files were detected as generated, fall back to expected naming
-	if len(generatedSvgs) == 0 {
-		// Assume the output files have the same base name as the .puml file
+	if len(generatedOutputs) == 0 {
 		baseName := strings.TrimSuffix(filepath.Base(inputFile), ".puml")
-		expectedSvg := filepath.Join(outputDir, baseName+".svg")
-		expectedPng := filepath.Join(outputDir, baseName+".png")
+		expectedSvg := filepath.Join(tempDir, baseName+".svg")
+		expectedPng := filepath.Join(tempDir, baseName+".png")
 		if _, err := os.Stat(expectedSvg); err == nil {
-			generatedSvgs[expectedSvg] = true
+			finalPath := filepath.Join(outputDir, baseName+".svg")
+			if err := os.MkdirAll(filepath.Dir(finalPath), 0755); err == nil {
+				if err := moveFile(expectedSvg, finalPath); err == nil {
+					generatedOutputs[finalPath] = true
+				}
+			}
 		}
 		if _, err := os.Stat(expectedPng); err == nil {
-			generatedSvgs[expectedPng] = true
+			finalPath := filepath.Join(outputDir, baseName+".png")
+			if err := os.MkdirAll(filepath.Dir(finalPath), 0755); err == nil {
+				if err := moveFile(expectedPng, finalPath); err == nil {
+					generatedOutputs[finalPath] = true
+				}
+			}
 		}
 	}
 
@@ -147,7 +241,7 @@ func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDi
 
 	// Delete output files that are no longer generated
 	for oldSvg := range oldSvgs {
-		if !generatedSvgs[oldSvg] {
+		if !generatedOutputs[oldSvg] {
 			if err := os.Remove(oldSvg); err != nil {
 				if !os.IsNotExist(err) {
 					log.ErrorContext(ctx, "failed to delete orphaned output file", "file", oldSvg, "error", err)
@@ -160,7 +254,7 @@ func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDi
 
 	// Update the mapping
 	iw.fileToSvgMutex.Lock()
-	iw.fileToSvgMap[inputFile] = generatedSvgs
+	iw.fileToSvgMap[inputFile] = generatedOutputs
 	iw.fileToSvgMutex.Unlock()
 }
 
@@ -184,31 +278,43 @@ func (iw *InputWatcher) GetFiles(ctx context.Context) []string {
 	return files
 }
 
+func (iw *InputWatcher) startWatchingFile(ctx context.Context, watchedFile string, watchedOutputDir string) {
+	go func() {
+		for {
+			err := iw.watchFileFunc(ctx, watchedFile)
+			if err != nil {
+				log.ErrorContext(ctx, "stopped watching file", "error", err)
+				break
+			}
+
+			log.InfoContext(ctx, "file changed", "file", watchedFile)
+			iw.ExecuteAndTrack(ctx, watchedFile, watchedOutputDir)
+		}
+	}()
+}
+
 func (iw *InputWatcher) Run(ctx context.Context) error {
-	files := iw.GetFiles(ctx)
-	oldFiles := []string{}
+	oldFiles := iw.GetFiles(ctx)
+	for _, file := range oldFiles {
+		log.InfoContext(ctx, "watching existing file", "file", file)
+		iw.startWatchingFile(ctx, file, iw.calculateOutputDir(ctx, file))
+	}
 
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(iw.pollInterval):
+		}
+
+		files := iw.GetFiles(ctx)
+
 		for _, file := range files {
 			if !slices.Contains(oldFiles, file) {
 				log.InfoContext(ctx, "watching new file", "file", file)
 				outputDir := iw.calculateOutputDir(ctx, file)
 				iw.ExecuteAndTrack(ctx, file, outputDir)
-
-				// Fix goroutine closure bug by passing file and outputDir as parameters
-				go func(watchedFile string, watchedOutputDir string) {
-					for {
-						err := WatchFile(ctx, watchedFile)
-						if err != nil {
-							log.ErrorContext(ctx, "stopped watching file", "error", err)
-							break
-						}
-
-						log.InfoContext(ctx, "file changed", "file", watchedFile)
-
-						iw.ExecuteAndTrack(ctx, watchedFile, watchedOutputDir)
-					}
-				}(file, outputDir)
+				iw.startWatchingFile(ctx, file, outputDir)
 			}
 		}
 
@@ -241,13 +347,6 @@ func (iw *InputWatcher) Run(ctx context.Context) error {
 			}
 		}
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(100 * time.Millisecond):
-		}
-
 		oldFiles = files
-		files = iw.GetFiles(ctx)
 	}
 }

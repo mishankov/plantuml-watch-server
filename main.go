@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 	"embed"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mishankov/plantuml-watch-server/config"
@@ -27,21 +24,6 @@ var staticFiles embed.FS
 //go:embed templates
 var templateFiles embed.FS
 
-func calculateOutputDirForFile(ctx context.Context, inputFilePath, inputRoot, outputRoot string) string {
-	relPath, err := filepath.Rel(inputRoot, inputFilePath)
-	if err != nil {
-		log.ErrorContext(ctx, "error calculating relative path", "path", inputFilePath, "error", err)
-		return outputRoot
-	}
-
-	relDir := filepath.Dir(relPath)
-	if relDir == "." {
-		return outputRoot
-	}
-
-	return filepath.Join(outputRoot, relDir)
-}
-
 func main() {
 	ctx := context.Background()
 	app := application.New()
@@ -53,7 +35,7 @@ func main() {
 	}
 
 	puml := plantuml.New(config.PlantUMLPath)
-	iw := inputwatcher.New(config.InputFolder, config.OutputFolder, puml)
+	iw := inputwatcher.New(config.InputFolder, config.OutputFolder, puml, config.Parallelism)
 
 	// Preparing termplates
 	tmpls, err := template.New("").ParseFS(templateFiles, "templates/*.html")
@@ -66,22 +48,7 @@ func main() {
 		// Remove all stale outputs
 		os.RemoveAll(config.OutputFolder + "/")
 
-		// Generate initial SVGs - iterate through each file to preserve structure
-		inputPattern := config.InputFolder + "/**.puml"
-		files, err := filepath.Glob(inputPattern)
-		if err != nil {
-			return fmt.Errorf("Error finding .puml files: %w", err)
-		}
-
-		for _, file := range files {
-			// Skip files prefixed with underscore
-			if strings.HasPrefix(filepath.Base(file), "_") {
-				continue
-			}
-
-			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
-			iw.ExecuteAndTrack(ctx, file, outputDir)
-		}
+		iw.RenderFiles(ctx, iw.GetFiles(ctx))
 		return nil
 	}, application.StartupTaskConfig{Name: "initial generation", AbortOnError: true})
 

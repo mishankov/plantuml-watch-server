@@ -16,6 +16,11 @@ func New(jarPath string) *PlantUML {
 	return &PlantUML{jarPath: jarPath}
 }
 
+func (puml *PlantUML) Render(ctx context.Context, input, output string) {
+	puml.ExecuteWithFormat(ctx, input, output, "svg")
+	puml.ExecuteWithFormat(ctx, input, output, "png")
+}
+
 func (puml *PlantUML) Execute(ctx context.Context, input, output string) {
 	puml.ExecuteWithFormat(ctx, input, output, "svg")
 }
