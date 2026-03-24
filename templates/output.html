@@ -860,12 +860,6 @@
                         />
                     </svg>
                 </a>
-                <div class="diagram-info">
-                    <h1 class="diagram-title">{{ .Diagram }}</h1>
-                    <p class="diagram-subtitle">Live Preview</p>
-                </div>
-            </div>
-            <div class="toolbar-right">
                 <button
                     class="sidebar-toggle-btn"
                     onclick="toggleSidebar()"
@@ -889,6 +883,12 @@
                     </svg>
                     <span class="sidebar-toggle-label">Hide</span>
                 </button>
+                <div class="diagram-info">
+                    <h1 class="diagram-title">{{ .Diagram }}</h1>
+                    <p class="diagram-subtitle">Live Preview</p>
+                </div>
+            </div>
+            <div class="toolbar-right">
                 <a
                     href="/download/{{ .Diagram }}?ext=svg"
                     class="download-btn"
