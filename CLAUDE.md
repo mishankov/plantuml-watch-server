@@ -23,10 +23,10 @@ docker build -t plantuml-watch-server .
 ### Running
 ```bash
 # Run with default parameters
-go run .
+go run . run
 
 # Run with custom parameters
-go run . -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080
+go run . run -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080
 
 # Run with Docker
 docker run -d --name plantuml-watch-server -p 8080:8080 -v /path/to/input:/input -v /path/to/output:/output ghcr.io/mishankov/plantuml-watch-server:latest

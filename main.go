@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -48,6 +50,9 @@ func main() {
 
 	config, err := config.NewFromCLIArgs()
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		log.ErrorContext(ctx, "failed to load config", "error", err)
 		return
 	}

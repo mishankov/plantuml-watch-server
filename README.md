@@ -48,7 +48,7 @@ PlantUML Watch Server can be run both as a standalone executable or Docker conta
 
 #### Running the Executable
 
-Run the executable with the command line options below.
+Use the `run` command to start the server with the command line options below.
 
 #### Command Line Parameters
 
@@ -61,11 +61,11 @@ Run the executable with the command line options below.
 - `-port [number]`  
   Specifies the port number for the HTTP server. Default: `8080`.
 - `-h`  
-  Prints the help message.
+  Prints the application flag help when used as `plantuml-watch-server run -h`.
 
 Example:
 ```bash
-plantuml-watch-server -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080
+plantuml-watch-server run -plantumlPath="/path/to/plantuml.jar" -input="./diagrams" -output="./output" -port=8080
 ```
 
 ### Docker
@@ -89,6 +89,7 @@ Example `compose.yml`:
 services:
   plantuml-watch-server:
     image: ghcr.io/mishankov/plantuml-watch-server:latest
+    command: ["run", "-input=/input", "-output=/output"]
     ports:
       - "8080:8080"
     volumes: 
