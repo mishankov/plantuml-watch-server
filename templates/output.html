@@ -1090,6 +1090,62 @@
                 setTheme(current === "dark" ? "light" : "dark");
             }
 
+            const sidebarFolderStateKey = "diagram-sidebar-folder-state";
+
+            function readSidebarFolderState() {
+                try {
+                    const stored = localStorage.getItem(sidebarFolderStateKey);
+                    if (!stored) return {};
+
+                    const parsed = JSON.parse(stored);
+                    return parsed && typeof parsed === "object" ? parsed : {};
+                } catch {
+                    return {};
+                }
+            }
+
+            function writeSidebarFolderState(state) {
+                localStorage.setItem(
+                    sidebarFolderStateKey,
+                    JSON.stringify(state),
+                );
+            }
+
+            function syncSidebarFolderState() {
+                const state = readSidebarFolderState();
+                let changed = false;
+
+                document
+                    .querySelectorAll(".sidebar-folder[data-folder-id]")
+                    .forEach((folder) => {
+                        const folderId = folder.dataset.folderId;
+                        if (!folderId) {
+                            return;
+                        }
+
+                        if (
+                            Object.prototype.hasOwnProperty.call(
+                                state,
+                                folderId,
+                            )
+                        ) {
+                            folder.classList.toggle(
+                                "collapsed",
+                                state[folderId],
+                            );
+                            return;
+                        }
+
+                        state[folderId] =
+                            folder.classList.contains("collapsed");
+                        changed = true;
+                    });
+
+                if (changed) {
+                    writeSidebarFolderState(state);
+                }
+            }
+
             function updateSidebarToggle(collapsed) {
                 document
                     .querySelectorAll("[data-sidebar-toggle]")
@@ -1184,7 +1240,17 @@
             }
 
             function toggleFolder(element) {
-                element.closest(".sidebar-folder").classList.toggle("collapsed");
+                const folder = element.closest(".sidebar-folder");
+                folder.classList.toggle("collapsed");
+
+                const folderId = folder.dataset.folderId;
+                if (!folderId) {
+                    return;
+                }
+
+                const state = readSidebarFolderState();
+                state[folderId] = folder.classList.contains("collapsed");
+                writeSidebarFolderState(state);
             }
 
             // WebSocket connection
@@ -1236,6 +1302,7 @@
             }
 
             connect();
+            syncSidebarFolderState();
 
             // Keyboard shortcuts
             document.addEventListener("keydown", (e) => {
@@ -1248,7 +1315,7 @@
 </html>
 
 {{define "outputNode"}} {{if .IsFolder}}
-<li class="{{if .HasActiveDescendant}}sidebar-folder{{else}}sidebar-folder collapsed{{end}}">
+<li class="{{if .HasActiveDescendant}}sidebar-folder{{else}}sidebar-folder collapsed{{end}}" data-folder-id="{{.Path}}">
     <button class="sidebar-folder-header" onclick="toggleFolder(this)" type="button">
         <span class="sidebar-folder-icon">
             <svg

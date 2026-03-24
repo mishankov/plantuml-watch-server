@@ -69,8 +69,10 @@ func buildFileTree(files []string, activePath string) []*FileNode {
 				}
 			}
 			if folderNode == nil {
+				folderPath := strings.Join(parts[:i+1], "/")
 				folderNode = &FileNode{
 					Name:     part,
+					Path:     folderPath,
 					IsFolder: true,
 					Children: []*FileNode{},
 				}

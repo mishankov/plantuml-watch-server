@@ -27,10 +27,16 @@ func TestBuildFileTreeMarksActivePathAndSortsNodes(t *testing.T) {
 	if !folder.IsFolder || !folder.HasActiveDescendant {
 		t.Fatalf("expected folder node to be marked with active descendant: %#v", folder)
 	}
+	if folder.Path != "folder" {
+		t.Fatalf("expected folder path to be preserved, got %#v", folder)
+	}
 
 	subfolder := folder.Children[0]
 	if subfolder.Name != "sub" || !subfolder.HasActiveDescendant {
 		t.Fatalf("expected subfolder to stay expanded for active file: %#v", subfolder)
+	}
+	if subfolder.Path != "folder/sub" {
+		t.Fatalf("expected subfolder path to be preserved, got %#v", subfolder)
 	}
 
 	leaf := subfolder.Children[0]
