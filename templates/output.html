@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{{ . }} | PlantUML Watch</title>
+        <title>{{ .Diagram }} | PlantUML Watch</title>
         <link rel="icon" type="image/x-icon" href="/static/plant.ico" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,6 +19,11 @@
                         ? "dark"
                         : "light");
                 document.documentElement.setAttribute("data-theme", theme);
+                document.documentElement.classList.toggle(
+                    "sidebar-collapsed",
+                    localStorage.getItem("diagram-sidebar-collapsed") ===
+                        "true",
+                );
             })();
         </script>
         <style>
@@ -42,6 +47,7 @@
                 --grid-color: rgba(99, 132, 181, 0.08);
                 --success: #10b981;
                 --error: #ef4444;
+                --sidebar-width: 320px;
             }
 
             [data-theme="dark"] {
@@ -273,6 +279,239 @@
                 overflow: auto;
             }
 
+            .content-shell {
+                display: grid;
+                grid-template-columns: minmax(260px, var(--sidebar-width)) minmax(
+                        0,
+                        1fr
+                    );
+                gap: 24px;
+                align-items: start;
+                min-height: 100%;
+                transition: grid-template-columns 0.28s ease;
+            }
+
+            html.sidebar-collapsed .content-shell {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .sidebar {
+                position: sticky;
+                top: 0;
+                align-self: start;
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 18px;
+                box-shadow: var(--shadow-lg);
+                overflow: hidden;
+                transform-origin: left center;
+                transition:
+                    opacity 0.24s ease,
+                    transform 0.24s ease;
+            }
+
+            html.sidebar-collapsed .sidebar {
+                display: none;
+            }
+
+            .sidebar-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 18px 20px;
+                border-bottom: 1px solid var(--border);
+                background: linear-gradient(
+                    180deg,
+                    var(--bg-card) 0%,
+                    var(--bg-elevated) 100%
+                );
+            }
+
+            .sidebar-title {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.82rem;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-secondary);
+            }
+
+            .sidebar-meta {
+                font-size: 0.75rem;
+                color: var(--text-muted);
+            }
+
+            .sidebar-toggle-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 14px;
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                background: var(--bg-elevated);
+                color: var(--text-secondary);
+                cursor: pointer;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.74rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                transition: all 0.22s ease;
+            }
+
+            .sidebar-toggle-btn:hover {
+                background: var(--bg-card-hover);
+                border-color: var(--accent);
+                color: var(--accent);
+                transform: translateY(-1px);
+                box-shadow: var(--shadow-md);
+            }
+
+            .sidebar-toggle-btn svg {
+                width: 16px;
+                height: 16px;
+                transition: transform 0.22s ease;
+            }
+
+            html.sidebar-collapsed .sidebar-toggle-btn svg {
+                transform: rotate(180deg);
+            }
+
+            .sidebar-tree {
+                list-style: none;
+                padding: 12px;
+                max-height: calc(100vh - 190px);
+                overflow: auto;
+            }
+
+            .sidebar-tree ul {
+                list-style: none;
+                margin-left: 18px;
+                padding-left: 10px;
+                border-left: 1px solid var(--border);
+            }
+
+            .sidebar-folder {
+                margin-bottom: 6px;
+            }
+
+            .sidebar-folder-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                width: 100%;
+                border: none;
+                background: transparent;
+                color: var(--text-secondary);
+                padding: 8px 10px;
+                border-radius: 10px;
+                cursor: pointer;
+                text-align: left;
+                transition: all 0.2s ease;
+            }
+
+            .sidebar-folder-header:hover {
+                background: var(--bg-card-hover);
+                color: var(--text-primary);
+            }
+
+            .sidebar-folder-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 18px;
+                height: 18px;
+                color: var(--accent);
+                transition: transform 0.2s ease;
+                flex-shrink: 0;
+            }
+
+            .sidebar-folder.collapsed .sidebar-folder-icon {
+                transform: rotate(-90deg);
+            }
+
+            .sidebar-folder-name {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.8rem;
+                font-weight: 600;
+            }
+
+            .sidebar-folder.collapsed > ul {
+                display: none;
+            }
+
+            .sidebar-file {
+                margin-bottom: 4px;
+            }
+
+            .sidebar-file-link {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 12px;
+                border-radius: 12px;
+                text-decoration: none;
+                color: var(--text-secondary);
+                border: 1px solid transparent;
+                transition: all 0.2s ease;
+            }
+
+            .sidebar-file-link:hover {
+                background: var(--bg-card-hover);
+                border-color: var(--border);
+                color: var(--text-primary);
+            }
+
+            .sidebar-file-link.active {
+                background: linear-gradient(
+                    135deg,
+                    var(--accent-glow) 0%,
+                    rgba(255, 255, 255, 0) 100%
+                );
+                border-color: var(--border-strong);
+                color: var(--text-primary);
+                box-shadow: var(--shadow-sm);
+            }
+
+            .sidebar-file-link svg {
+                width: 16px;
+                height: 16px;
+                color: var(--accent);
+                flex-shrink: 0;
+            }
+
+            .sidebar-file-text {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+
+            .sidebar-file-name {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.8rem;
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .sidebar-file-meta {
+                font-size: 0.72rem;
+                color: var(--text-muted);
+            }
+
+            .sidebar-empty {
+                padding: 24px 18px;
+                color: var(--text-muted);
+                font-size: 0.85rem;
+                text-align: center;
+            }
+
+            .diagram-stage {
+                min-width: 0;
+            }
+
             /* Diagram container with corner accents */
             .diagram-frame {
                 position: relative;
@@ -496,7 +735,8 @@
             .zoom-controls {
                 position: fixed;
                 bottom: 24px;
-                left: 24px;
+                left: 50%;
+                transform: translateX(-50%);
                 z-index: 100;
                 display: flex;
                 gap: 4px;
@@ -560,8 +800,29 @@
                     padding: 10px;
                 }
 
+                .sidebar-toggle-btn span {
+                    display: none;
+                }
+
+                .sidebar-toggle-btn {
+                    padding: 10px;
+                }
+
                 .main-content {
                     padding: 16px;
+                }
+
+                .content-shell {
+                    grid-template-columns: 1fr;
+                    gap: 16px;
+                }
+
+                .sidebar {
+                    position: static;
+                }
+
+                .sidebar-tree {
+                    max-height: 320px;
                 }
 
                 #output {
@@ -576,7 +837,7 @@
 
                 .zoom-controls {
                     bottom: 16px;
-                    left: 16px;
+                    left: 50%;
                 }
             }
         </style>
@@ -599,14 +860,37 @@
                         />
                     </svg>
                 </a>
+                <button
+                    class="sidebar-toggle-btn"
+                    onclick="toggleSidebar()"
+                    data-sidebar-toggle
+                    type="button"
+                    aria-label="Toggle diagram sidebar"
+                    title="Toggle diagram sidebar"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M4 6h16M4 12h10M4 18h16"
+                        />
+                    </svg>
+                    <span class="sidebar-toggle-label">Hide</span>
+                </button>
                 <div class="diagram-info">
-                    <h1 class="diagram-title">{{ . }}</h1>
+                    <h1 class="diagram-title">{{ .Diagram }}</h1>
                     <p class="diagram-subtitle">Live Preview</p>
                 </div>
             </div>
             <div class="toolbar-right">
                 <a
-                    href="/download/{{ . }}?ext=svg"
+                    href="/download/{{ .Diagram }}?ext=svg"
                     class="download-btn"
                     title="Download SVG"
                 >
@@ -626,7 +910,7 @@
                     <span>SVG</span>
                 </a>
                 <a
-                    href="/download/{{ . }}?ext=png"
+                    href="/download/{{ .Diagram }}?ext=png"
                     class="download-btn"
                     title="Download PNG"
                 >
@@ -684,13 +968,33 @@
         </header>
 
         <main class="main-content">
-            <div class="diagram-frame" id="diagram-frame">
-                <span class="corner-bl"></span>
-                <span class="corner-br"></span>
-                <div id="output">
-                    <div class="loading">
-                        <div class="spinner-ring"></div>
-                        <span class="loading-text">Loading diagram</span>
+            <div class="content-shell">
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <div>
+                            <p class="sidebar-title">Diagrams</p>
+                            <p class="sidebar-meta">Browse without leaving live preview</p>
+                        </div>
+                    </div>
+                    {{if .Tree}}
+                    <ul class="sidebar-tree">
+                        {{range .Tree}} {{template "outputNode" .}} {{end}}
+                    </ul>
+                    {{else}}
+                    <div class="sidebar-empty">No generated diagrams found yet.</div>
+                    {{end}}
+                </aside>
+
+                <div class="diagram-stage">
+                    <div class="diagram-frame" id="diagram-frame">
+                        <span class="corner-bl"></span>
+                        <span class="corner-br"></span>
+                        <div id="output">
+                            <div class="loading">
+                                <div class="spinner-ring"></div>
+                                <span class="loading-text">Loading diagram</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -786,7 +1090,114 @@
                 setTheme(current === "dark" ? "light" : "dark");
             }
 
+            const sidebarFolderStateKey = "diagram-sidebar-folder-state";
+
+            function readSidebarFolderState() {
+                try {
+                    const stored = localStorage.getItem(sidebarFolderStateKey);
+                    if (!stored) return {};
+
+                    const parsed = JSON.parse(stored);
+                    return parsed && typeof parsed === "object" ? parsed : {};
+                } catch {
+                    return {};
+                }
+            }
+
+            function writeSidebarFolderState(state) {
+                localStorage.setItem(
+                    sidebarFolderStateKey,
+                    JSON.stringify(state),
+                );
+            }
+
+            function syncSidebarFolderState() {
+                const state = readSidebarFolderState();
+                let changed = false;
+
+                document
+                    .querySelectorAll(".sidebar-folder[data-folder-id]")
+                    .forEach((folder) => {
+                        const folderId = folder.dataset.folderId;
+                        if (!folderId) {
+                            return;
+                        }
+
+                        if (
+                            Object.prototype.hasOwnProperty.call(
+                                state,
+                                folderId,
+                            )
+                        ) {
+                            folder.classList.toggle(
+                                "collapsed",
+                                state[folderId],
+                            );
+                            return;
+                        }
+
+                        state[folderId] =
+                            folder.classList.contains("collapsed");
+                        changed = true;
+                    });
+
+                if (changed) {
+                    writeSidebarFolderState(state);
+                }
+            }
+
+            function updateSidebarToggle(collapsed) {
+                document
+                    .querySelectorAll("[data-sidebar-toggle]")
+                    .forEach((button) => {
+                        button.setAttribute(
+                            "title",
+                            collapsed
+                                ? "Show diagram sidebar"
+                                : "Hide diagram sidebar",
+                        );
+                        button.setAttribute(
+                            "aria-label",
+                            collapsed
+                                ? "Show diagram sidebar"
+                                : "Hide diagram sidebar",
+                        );
+
+                        const label = button.querySelector(
+                            ".sidebar-toggle-label",
+                        );
+                        if (label) {
+                            label.textContent = collapsed ? "Show" : "Hide";
+                        }
+                    });
+            }
+
+            function setSidebarCollapsed(collapsed) {
+                document.documentElement.classList.toggle(
+                    "sidebar-collapsed",
+                    collapsed,
+                );
+                localStorage.setItem(
+                    "diagram-sidebar-collapsed",
+                    String(collapsed),
+                );
+                updateSidebarToggle(collapsed);
+            }
+
+            function toggleSidebar() {
+                setSidebarCollapsed(
+                    !document.documentElement.classList.contains(
+                        "sidebar-collapsed",
+                    ),
+                );
+            }
+
             setTheme(getPreferredTheme());
+            updateSidebarToggle(
+                document.documentElement.classList.contains(
+                    "sidebar-collapsed",
+                ),
+            );
 
             window
                 .matchMedia("(prefers-color-scheme: dark)")
@@ -826,6 +1237,20 @@
             function zoomReset() {
                 currentZoom = 100;
                 updateZoom();
+            }
+
+            function toggleFolder(element) {
+                const folder = element.closest(".sidebar-folder");
+                folder.classList.toggle("collapsed");
+
+                const folderId = folder.dataset.folderId;
+                if (!folderId) {
+                    return;
+                }
+
+                const state = readSidebarFolderState();
+                state[folderId] = folder.classList.contains("collapsed");
+                writeSidebarFolderState(state);
             }
 
             // WebSocket connection
@@ -877,6 +1302,7 @@
             }
 
             connect();
+            syncSidebarFolderState();
 
             // Keyboard shortcuts
             document.addEventListener("keydown", (e) => {
@@ -887,3 +1313,53 @@
         </script>
     </body>
 </html>
+
+{{define "outputNode"}} {{if .IsFolder}}
+<li class="{{if .HasActiveDescendant}}sidebar-folder{{else}}sidebar-folder collapsed{{end}}" data-folder-id="{{.Path}}">
+    <button class="sidebar-folder-header" onclick="toggleFolder(this)" type="button">
+        <span class="sidebar-folder-icon">
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"
+                />
+            </svg>
+        </span>
+        <span class="sidebar-folder-name">{{.Name}}</span>
+    </button>
+    {{if .Children}}
+    <ul>
+        {{range .Children}} {{template "outputNode" .}} {{end}}
+    </ul>
+    {{end}}
+</li>
+{{else}}
+<li class="sidebar-file">
+    <a href="/output/{{.Path}}" class="{{if .Active}}sidebar-file-link active{{else}}sidebar-file-link{{end}}">
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+        >
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+        </svg>
+        <span class="sidebar-file-text">
+            <span class="sidebar-file-name">{{.Name}}</span>
+            <span class="sidebar-file-meta">PlantUML diagram</span>
+        </span>
+    </a>
+</li>
+{{end}} {{end}}
