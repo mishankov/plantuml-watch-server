@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mishankov/plantuml-watch-server/config"
@@ -73,6 +74,7 @@ func main() {
 			return fmt.Errorf("Error finding .puml files: %w", err)
 		}
 
+		var wg sync.WaitGroup
 		for _, file := range files {
 			// Skip files prefixed with underscore
 			if strings.HasPrefix(filepath.Base(file), "_") {
@@ -80,8 +82,11 @@ func main() {
 			}
 
 			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
-			iw.ExecuteAndTrack(ctx, file, outputDir)
+			wg.Go(func() { iw.ExecuteAndTrack(ctx, file, outputDir) })
 		}
+
+		wg.Wait()
+
 		return nil
 	}, application.StartupTaskConfig{Name: "initial generation", AbortOnError: true})
 
