@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mishankov/plantuml-watch-server/config"
@@ -48,6 +51,9 @@ func main() {
 
 	config, err := config.NewFromCLIArgs()
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		log.ErrorContext(ctx, "failed to load config", "error", err)
 		return
 	}
@@ -73,14 +79,19 @@ func main() {
 			return fmt.Errorf("Error finding .puml files: %w", err)
 		}
 
+		var wg sync.WaitGroup
 		for _, file := range files {
 			// Skip files prefixed with underscore
 			if strings.HasPrefix(filepath.Base(file), "_") {
 				continue
 			}
 
-			iw.RegenerateIfNeeded(ctx, file)
+			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
+			wg.Go(func() { iw.ExecuteAndTrack(ctx, file, outputDir) })
 		}
+
+		wg.Wait()
+
 		return nil
 	}, application.StartupTaskConfig{Name: "initial generation", AbortOnError: true})
 
