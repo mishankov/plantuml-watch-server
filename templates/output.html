@@ -336,11 +336,15 @@
 
             .sidebar {
                 position: fixed;
-                top: 116px;
+                top: 96px;
                 left: 32px;
                 width: min(var(--sidebar-width), calc(100vw - 64px));
-                max-height: calc(100vh - 148px);
-                background: var(--bg-card);
+                max-height: calc(100vh - 120px);
+                background: linear-gradient(
+                    180deg,
+                    var(--bg-card) 0%,
+                    var(--bg-elevated) 100%
+                );
                 border: 1px solid var(--border);
                 border-radius: 18px;
                 box-shadow: var(--shadow-lg);
@@ -361,13 +365,8 @@
                 align-items: center;
                 justify-content: space-between;
                 gap: 16px;
-                padding: 18px 20px;
+                padding: 18px 20px 14px;
                 border-bottom: 1px solid var(--border);
-                background: linear-gradient(
-                    180deg,
-                    var(--bg-card) 0%,
-                    var(--bg-elevated) 100%
-                );
             }
 
             .sidebar-title {
@@ -422,8 +421,8 @@
 
             .sidebar-tree {
                 list-style: none;
-                padding: 12px;
-                max-height: calc(100vh - 190px);
+                padding: 18px 20px 20px;
+                max-height: calc(100vh - 206px);
                 overflow: auto;
             }
 
