@@ -2,6 +2,7 @@ package inputwatcher
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -13,6 +14,18 @@ import (
 	"github.com/mishankov/plantuml-watch-server/plantuml"
 	"github.com/platforma-dev/platforma/log"
 )
+
+var ErrOutputNotTracked = errors.New("output file is not tracked")
+
+type CompileResult struct {
+	OK      bool
+	Message string
+}
+
+type trackedGeneration struct {
+	ModTime time.Time
+	Result  CompileResult
+}
 
 func WatchFile(ctx context.Context, filePath string) error {
 	initialStat, err := os.Stat(filePath)
@@ -47,6 +60,10 @@ type InputWatcher struct {
 	// Maps .puml file path to the set of output files (.svg and .png) it generated
 	fileToSvgMap   map[string]map[string]bool
 	fileToSvgMutex sync.RWMutex
+	compileCache   map[string]trackedGeneration
+	compileMutex   sync.RWMutex
+	fileLocks      map[string]*sync.Mutex
+	fileLocksMutex sync.Mutex
 }
 
 func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
@@ -55,6 +72,8 @@ func New(inputPath, outputPath string, pulm *plantuml.PlantUML) *InputWatcher {
 		outputPath:   outputPath,
 		pulm:         pulm,
 		fileToSvgMap: make(map[string]map[string]bool),
+		compileCache: make(map[string]trackedGeneration),
+		fileLocks:    make(map[string]*sync.Mutex),
 	}
 }
 
@@ -91,8 +110,90 @@ func (iw *InputWatcher) getSvgFilesInDir(ctx context.Context, dir string) map[st
 	return outputFiles
 }
 
-// ExecuteAndTrack executes PlantUML for a file and tracks which SVGs were generated
-func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDir string) {
+func (iw *InputWatcher) getFileLock(inputFile string) *sync.Mutex {
+	iw.fileLocksMutex.Lock()
+	defer iw.fileLocksMutex.Unlock()
+
+	lock, ok := iw.fileLocks[inputFile]
+	if !ok {
+		lock = &sync.Mutex{}
+		iw.fileLocks[inputFile] = lock
+	}
+
+	return lock
+}
+
+func (iw *InputWatcher) outputPathForDiagram(outputRel string) (string, error) {
+	cleanRel := filepath.Clean(outputRel)
+	fullPath := filepath.Join(iw.outputPath, cleanRel+".svg")
+
+	absOutputPath, err := filepath.Abs(iw.outputPath)
+	if err != nil {
+		return "", err
+	}
+
+	absFullPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return "", err
+	}
+
+	if absFullPath != absOutputPath && !strings.HasPrefix(absFullPath, absOutputPath+string(filepath.Separator)) {
+		return "", ErrOutputNotTracked
+	}
+
+	return absFullPath, nil
+}
+
+func (iw *InputWatcher) relativeInputPath(inputFile string) string {
+	relPath, err := filepath.Rel(iw.inputPath, inputFile)
+	if err != nil {
+		return filepath.Base(inputFile)
+	}
+
+	return filepath.ToSlash(relPath)
+}
+
+func (iw *InputWatcher) ResolveInputForOutput(outputFile string) (string, bool) {
+	iw.fileToSvgMutex.RLock()
+	defer iw.fileToSvgMutex.RUnlock()
+
+	for inputFile, outputs := range iw.fileToSvgMap {
+		if outputs[outputFile] {
+			return inputFile, true
+		}
+	}
+
+	return "", false
+}
+
+func (iw *InputWatcher) setCompileResult(inputFile string, modTime time.Time, result CompileResult) {
+	iw.compileMutex.Lock()
+	defer iw.compileMutex.Unlock()
+
+	iw.compileCache[inputFile] = trackedGeneration{
+		ModTime: modTime,
+		Result:  result,
+	}
+}
+
+func (iw *InputWatcher) cachedCompileResult(inputFile string, modTime time.Time) (CompileResult, bool) {
+	iw.compileMutex.RLock()
+	defer iw.compileMutex.RUnlock()
+
+	tracked, ok := iw.compileCache[inputFile]
+	if !ok {
+		return CompileResult{}, false
+	}
+
+	if tracked.ModTime.Equal(modTime) {
+		return tracked.Result, true
+	}
+
+	return CompileResult{}, false
+}
+
+// ExecuteAndTrack executes PlantUML for a file and tracks which SVGs were generated.
+func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDir string) CompileResult {
 	// Get SVG files before execution
 	svgsBefore := iw.getSvgFilesInDir(ctx, outputDir)
 
@@ -104,9 +205,17 @@ func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDi
 		}
 	}
 
-	// Execute PlantUML for both SVG and PNG formats
-	iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "svg")
-	iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "png")
+	outputText, err := iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "svg")
+	if err != nil {
+		return CompileResult{
+			OK:      false,
+			Message: outputText,
+		}
+	}
+
+	if _, err := iw.pulm.ExecuteWithFormat(ctx, inputFile, outputDir, "png"); err != nil {
+		log.WarnContext(ctx, "png generation failed after successful svg generation", "input", inputFile, "error", err)
+	}
 
 	// Get SVG files after execution
 	svgsAfter := iw.getSvgFilesInDir(ctx, outputDir)
@@ -162,6 +271,101 @@ func (iw *InputWatcher) ExecuteAndTrack(ctx context.Context, inputFile, outputDi
 	iw.fileToSvgMutex.Lock()
 	iw.fileToSvgMap[inputFile] = generatedSvgs
 	iw.fileToSvgMutex.Unlock()
+
+	return CompileResult{OK: true}
+}
+
+func (iw *InputWatcher) RegenerateIfNeeded(ctx context.Context, inputFile string) CompileResult {
+	info, err := os.Stat(inputFile)
+	if err != nil {
+		log.ErrorContext(ctx, "failed to stat input file before regeneration", "input", inputFile, "error", err)
+		return CompileResult{
+			OK:      false,
+			Message: err.Error(),
+		}
+	}
+
+	if cached, ok := iw.cachedCompileResult(inputFile, info.ModTime()); ok {
+		log.InfoContext(ctx, "skipping duplicate compile for unchanged file", "input", inputFile)
+		return cached
+	}
+
+	lock := iw.getFileLock(inputFile)
+	lock.Lock()
+	defer lock.Unlock()
+
+	info, err = os.Stat(inputFile)
+	if err != nil {
+		log.ErrorContext(ctx, "failed to stat input file during regeneration", "input", inputFile, "error", err)
+		return CompileResult{
+			OK:      false,
+			Message: err.Error(),
+		}
+	}
+
+	if cached, ok := iw.cachedCompileResult(inputFile, info.ModTime()); ok {
+		log.InfoContext(ctx, "skipping duplicate compile after waiting for file lock", "input", inputFile)
+		return cached
+	}
+
+	outputDir := iw.calculateOutputDir(ctx, inputFile)
+	result := iw.ExecuteAndTrack(ctx, inputFile, outputDir)
+	iw.setCompileResult(inputFile, info.ModTime(), result)
+	return result
+}
+
+func (iw *InputWatcher) ReadSourceForOutput(outputRel string) (string, string, error) {
+	outputFile, err := iw.outputPathForDiagram(outputRel)
+	if err != nil {
+		return "", "", err
+	}
+
+	inputFile, ok := iw.ResolveInputForOutput(outputFile)
+	if !ok {
+		return "", "", ErrOutputNotTracked
+	}
+
+	content, err := os.ReadFile(inputFile)
+	if err != nil {
+		return "", "", err
+	}
+
+	return iw.relativeInputPath(inputFile), string(content), nil
+}
+
+func (iw *InputWatcher) WriteSourceForOutput(ctx context.Context, outputRel string, content string) (string, CompileResult, error) {
+	outputFile, err := iw.outputPathForDiagram(outputRel)
+	if err != nil {
+		return "", CompileResult{}, err
+	}
+
+	inputFile, ok := iw.ResolveInputForOutput(outputFile)
+	if !ok {
+		return "", CompileResult{}, ErrOutputNotTracked
+	}
+
+	fileInfo, err := os.Stat(inputFile)
+	if err != nil {
+		return "", CompileResult{}, err
+	}
+
+	lock := iw.getFileLock(inputFile)
+	lock.Lock()
+	defer lock.Unlock()
+
+	if err := os.WriteFile(inputFile, []byte(content), fileInfo.Mode().Perm()); err != nil {
+		return "", CompileResult{}, err
+	}
+
+	info, err := os.Stat(inputFile)
+	if err != nil {
+		return "", CompileResult{}, err
+	}
+
+	result := iw.ExecuteAndTrack(ctx, inputFile, iw.calculateOutputDir(ctx, inputFile))
+	iw.setCompileResult(inputFile, info.ModTime(), result)
+
+	return iw.relativeInputPath(inputFile), result, nil
 }
 
 func (iw *InputWatcher) GetFiles(ctx context.Context) []string {
@@ -192,11 +396,9 @@ func (iw *InputWatcher) Run(ctx context.Context) error {
 		for _, file := range files {
 			if !slices.Contains(oldFiles, file) {
 				log.InfoContext(ctx, "watching new file", "file", file)
-				outputDir := iw.calculateOutputDir(ctx, file)
-				iw.ExecuteAndTrack(ctx, file, outputDir)
+				iw.RegenerateIfNeeded(ctx, file)
 
-				// Fix goroutine closure bug by passing file and outputDir as parameters
-				go func(watchedFile string, watchedOutputDir string) {
+				go func(watchedFile string) {
 					for {
 						err := WatchFile(ctx, watchedFile)
 						if err != nil {
@@ -206,9 +408,9 @@ func (iw *InputWatcher) Run(ctx context.Context) error {
 
 						log.InfoContext(ctx, "file changed", "file", watchedFile)
 
-						iw.ExecuteAndTrack(ctx, watchedFile, watchedOutputDir)
+						iw.RegenerateIfNeeded(ctx, watchedFile)
 					}
-				}(file, outputDir)
+				}(file)
 			}
 		}
 

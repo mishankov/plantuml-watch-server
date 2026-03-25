@@ -2,8 +2,10 @@ package plantuml
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/platforma-dev/platforma/log"
 )
@@ -16,15 +18,15 @@ func New(jarPath string) *PlantUML {
 	return &PlantUML{jarPath: jarPath}
 }
 
-func (puml *PlantUML) Execute(ctx context.Context, input, output string) {
-	puml.ExecuteWithFormat(ctx, input, output, "svg")
+func (puml *PlantUML) Execute(ctx context.Context, input, output string) (string, error) {
+	return puml.ExecuteWithFormat(ctx, input, output, "svg")
 }
 
-func (puml *PlantUML) ExecuteWithFormat(ctx context.Context, input, output, format string) {
+func (puml *PlantUML) ExecuteWithFormat(ctx context.Context, input, output, format string) (string, error) {
 	// Ensure output directory exists
 	if err := os.MkdirAll(output, 0755); err != nil {
 		log.ErrorContext(ctx, "failed to create output directory", "output", output, "error", err)
-		return
+		return "", err
 	}
 
 	// Map format to PlantUML flag
@@ -40,9 +42,10 @@ func (puml *PlantUML) ExecuteWithFormat(ctx context.Context, input, output, form
 	}
 
 	javaArgs := []string{"-jar", puml.jarPath, "-o", output, formatFlag, input}
-	pumlCmd := exec.Command("java", javaArgs...)
+	pumlCmd := exec.CommandContext(ctx, "java", javaArgs...)
 
 	pumlOut, err := pumlCmd.CombinedOutput()
+	outputText := strings.TrimSpace(string(pumlOut))
 	if err != nil {
 		switch e := err.(type) {
 		case *exec.Error:
@@ -52,9 +55,15 @@ func (puml *PlantUML) ExecuteWithFormat(ctx context.Context, input, output, form
 		default:
 			log.ErrorContext(ctx, "unexpected error executing plantuml", "error", err)
 		}
+		if outputText != "" {
+			log.InfoContext(ctx, "plantuml output", "output", outputText)
+		}
+		return outputText, fmt.Errorf("plantuml %s generation failed: %w", format, err)
 	}
 
-	if len(pumlOut) != 0 {
-		log.InfoContext(ctx, "plantuml output", "output", string(pumlOut))
+	if outputText != "" {
+		log.InfoContext(ctx, "plantuml output", "output", outputText)
 	}
+
+	return outputText, nil
 }
