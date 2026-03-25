@@ -24,6 +24,10 @@
                     localStorage.getItem("diagram-sidebar-collapsed") ===
                         "true",
                 );
+                document.documentElement.classList.toggle(
+                    "editor-drawer-open",
+                    localStorage.getItem("diagram-editor-open") === "true",
+                );
             })();
         </script>
         <style>
@@ -47,7 +51,9 @@
                 --grid-color: rgba(99, 132, 181, 0.08);
                 --success: #10b981;
                 --error: #ef4444;
+                --warning: #f59e0b;
                 --sidebar-width: 320px;
+                --editor-width: minmax(320px, 420px);
             }
 
             [data-theme="dark"] {
@@ -70,6 +76,7 @@
                 --grid-color: rgba(56, 189, 248, 0.04);
                 --success: #34d399;
                 --error: #f87171;
+                --warning: #fbbf24;
             }
 
             * {
@@ -214,6 +221,7 @@
             }
 
             .download-btn {
+                cursor: pointer;
                 display: inline-flex;
                 align-items: center;
                 gap: 8px;
@@ -242,6 +250,42 @@
             .download-btn svg {
                 width: 16px;
                 height: 16px;
+            }
+
+            .editor-toggle-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 14px;
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                background: var(--bg-elevated);
+                color: var(--text-secondary);
+                cursor: pointer;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.74rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                transition: all 0.22s ease;
+            }
+
+            .editor-toggle-btn:hover {
+                background: var(--bg-card-hover);
+                border-color: var(--accent);
+                color: var(--accent);
+                transform: translateY(-1px);
+                box-shadow: var(--shadow-md);
+            }
+
+            .editor-toggle-btn svg {
+                width: 16px;
+                height: 16px;
+            }
+
+            html.editor-drawer-open .editor-toggle-btn {
+                border-color: var(--border-strong);
+                color: var(--text-primary);
             }
 
             .theme-toggle {
@@ -277,33 +321,31 @@
                 z-index: 1;
                 padding: 32px;
                 overflow: auto;
+                transition: padding 0.28s ease;
+            }
+
+            html.editor-drawer-open .main-content {
+                padding-right: calc(32px + 420px + 24px);
             }
 
             .content-shell {
                 display: grid;
-                grid-template-columns: minmax(260px, var(--sidebar-width)) minmax(
-                        0,
-                        1fr
-                    );
-                gap: 24px;
-                align-items: start;
-                min-height: 100%;
-                transition: grid-template-columns 0.28s ease;
-            }
-
-            html.sidebar-collapsed .content-shell {
                 grid-template-columns: minmax(0, 1fr);
+                min-height: 100%;
             }
 
             .sidebar {
-                position: sticky;
-                top: 0;
-                align-self: start;
+                position: fixed;
+                top: 116px;
+                left: 32px;
+                width: min(var(--sidebar-width), calc(100vw - 64px));
+                max-height: calc(100vh - 148px);
                 background: var(--bg-card);
                 border: 1px solid var(--border);
                 border-radius: 18px;
                 box-shadow: var(--shadow-lg);
                 overflow: hidden;
+                z-index: 110;
                 transform-origin: left center;
                 transition:
                     opacity 0.24s ease,
@@ -512,6 +554,17 @@
                 min-width: 0;
             }
 
+            .workspace {
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+                min-height: 100%;
+            }
+
+            .diagram-stage .workspace {
+                justify-content: center;
+            }
+
             /* Diagram container with corner accents */
             .diagram-frame {
                 position: relative;
@@ -520,8 +573,12 @@
                 border-radius: 16px;
                 box-shadow: var(--shadow-lg);
                 animation: frameReveal 0.5s ease-out;
-                margin: auto;
+                margin: 0;
                 width: fit-content;
+            }
+
+            html.editor-drawer-open .diagram-frame {
+                margin: 0;
             }
 
             @keyframes frameReveal {
@@ -735,8 +792,7 @@
             .zoom-controls {
                 position: fixed;
                 bottom: 24px;
-                left: 50%;
-                transform: translateX(-50%);
+                left: 24px;
                 z-index: 100;
                 display: flex;
                 gap: 4px;
@@ -782,6 +838,222 @@
                 color: var(--text-muted);
             }
 
+            .editor-drawer {
+                display: none;
+                min-width: 0;
+                position: fixed;
+                top: 96px;
+                right: 24px;
+                width: min(420px, calc(100vw - 48px));
+                max-height: calc(100vh - 120px);
+                background: linear-gradient(
+                    180deg,
+                    var(--bg-card) 0%,
+                    var(--bg-elevated) 100%
+                );
+                border: 1px solid var(--border);
+                border-radius: 18px;
+                box-shadow: var(--shadow-lg);
+                overflow: hidden;
+                z-index: 120;
+            }
+
+            html.editor-drawer-open .editor-drawer {
+                display: flex;
+                flex-direction: column;
+                animation: drawerReveal 0.28s ease-out;
+            }
+
+            @keyframes drawerReveal {
+                from {
+                    opacity: 0;
+                    transform: translateX(18px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+
+            .editor-header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 18px 20px 14px;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .editor-title {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.82rem;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-secondary);
+            }
+
+            .editor-path {
+                margin-top: 6px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                word-break: break-word;
+            }
+
+            .editor-close-btn {
+                width: 36px;
+                height: 36px;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                background: var(--bg-elevated);
+                color: var(--text-secondary);
+                cursor: pointer;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            }
+
+            .editor-close-btn:hover {
+                color: var(--accent);
+                border-color: var(--accent);
+                background: var(--bg-card-hover);
+            }
+
+            .editor-close-btn svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .editor-status-bar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 20px;
+                border-bottom: 1px solid var(--border);
+                background: rgba(255, 255, 255, 0.02);
+            }
+
+            .editor-status {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.72rem;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--text-secondary);
+            }
+
+            .editor-status-indicator {
+                width: 10px;
+                height: 10px;
+                border-radius: 999px;
+                background: var(--text-muted);
+                box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.12);
+                transition: background-color 0.2s ease;
+            }
+
+            .editor-status[data-state="saved"] .editor-status-indicator {
+                background: var(--success);
+                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.14);
+            }
+
+            .editor-status[data-state="saving"] .editor-status-indicator {
+                background: var(--accent);
+                box-shadow: 0 0 0 4px var(--accent-glow);
+            }
+
+            .editor-status[data-state="dirty"] .editor-status-indicator {
+                background: var(--warning);
+                box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+            }
+
+            .editor-status[data-state="error"] .editor-status-indicator,
+            .editor-status[data-state="failed"] .editor-status-indicator {
+                background: var(--error);
+                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+            }
+
+            .editor-hint {
+                font-size: 0.72rem;
+                color: var(--text-muted);
+            }
+
+            .editor-panel {
+                padding: 18px 20px 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                overflow: auto;
+            }
+
+            .editor-textarea {
+                width: 100%;
+                min-height: 420px;
+                height: min(520px, calc(100vh - 320px));
+                resize: vertical;
+                border: 1px solid var(--border);
+                border-radius: 14px;
+                background: rgba(11, 18, 34, 0.04);
+                color: var(--text-primary);
+                padding: 18px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.84rem;
+                line-height: 1.65;
+                outline: none;
+                transition:
+                    border-color 0.2s ease,
+                    box-shadow 0.2s ease,
+                    background-color 0.2s ease;
+            }
+
+            [data-theme="dark"] .editor-textarea {
+                background: rgba(12, 18, 34, 0.68);
+            }
+
+            .editor-textarea:focus {
+                border-color: var(--accent);
+                box-shadow: 0 0 0 4px var(--accent-glow);
+            }
+
+            .editor-textarea:disabled {
+                opacity: 0.7;
+                cursor: wait;
+            }
+
+            .editor-error {
+                display: none;
+                border: 1px solid rgba(239, 68, 68, 0.28);
+                background: rgba(239, 68, 68, 0.08);
+                border-radius: 14px;
+                padding: 16px;
+            }
+
+            .editor-error.visible {
+                display: block;
+            }
+
+            .editor-error-title {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.74rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--error);
+                margin-bottom: 8px;
+            }
+
+            .editor-error-text {
+                white-space: pre-wrap;
+                word-break: break-word;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.78rem;
+                line-height: 1.6;
+                color: var(--text-primary);
+            }
+
             /* Responsive */
             @media (max-width: 640px) {
                 .toolbar {
@@ -812,6 +1084,10 @@
                     padding: 16px;
                 }
 
+                html.editor-drawer-open .main-content {
+                    padding-right: 16px;
+                }
+
                 .content-shell {
                     grid-template-columns: 1fr;
                     gap: 16px;
@@ -819,6 +1095,8 @@
 
                 .sidebar {
                     position: static;
+                    width: auto;
+                    max-height: none;
                 }
 
                 .sidebar-tree {
@@ -829,6 +1107,28 @@
                     padding: 16px;
                 }
 
+                .editor-panel {
+                    padding: 16px;
+                }
+
+                .editor-header,
+                .editor-status-bar {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                }
+
+                .editor-drawer {
+                    position: static;
+                    width: 100%;
+                    max-height: none;
+                    margin-top: 16px;
+                }
+
+                .editor-textarea {
+                    min-height: 320px;
+                    height: auto;
+                }
+
                 .status-badge {
                     bottom: 16px;
                     right: 16px;
@@ -837,7 +1137,7 @@
 
                 .zoom-controls {
                     bottom: 16px;
-                    left: 50%;
+                    left: 16px;
                 }
             }
         </style>
@@ -889,6 +1189,28 @@
                 </div>
             </div>
             <div class="toolbar-right">
+                <button
+                    class="editor-toggle-btn"
+                    onclick="toggleEditorDrawer()"
+                    type="button"
+                    aria-label="Toggle source editor"
+                    title="Toggle source editor"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.586-9.414a2 2 0 112.828 2.828L12 14l-4 1 1-4 8.414-8.414z"
+                        />
+                    </svg>
+                    <span>Edit Source</span>
+                </button>
                 <a
                     href="/download/{{ .Diagram }}?ext=svg"
                     class="download-btn"
@@ -986,15 +1308,69 @@
                 </aside>
 
                 <div class="diagram-stage">
-                    <div class="diagram-frame" id="diagram-frame">
-                        <span class="corner-bl"></span>
-                        <span class="corner-br"></span>
-                        <div id="output">
-                            <div class="loading">
-                                <div class="spinner-ring"></div>
-                                <span class="loading-text">Loading diagram</span>
+                    <div class="workspace">
+                        <div class="diagram-frame" id="diagram-frame">
+                            <span class="corner-bl"></span>
+                            <span class="corner-br"></span>
+                            <div id="output">
+                                <div class="loading">
+                                    <div class="spinner-ring"></div>
+                                    <span class="loading-text">Loading diagram</span>
+                                </div>
                             </div>
                         </div>
+
+                        <aside class="editor-drawer" id="editor-drawer">
+                            <div class="editor-header">
+                                <div>
+                                    <p class="editor-title">Source Editor</p>
+                                    <p class="editor-path" id="editor-source-path">Loading source path…</p>
+                                </div>
+                                <button
+                                    class="editor-close-btn"
+                                    onclick="setEditorDrawerOpen(false)"
+                                    type="button"
+                                    aria-label="Close source editor"
+                                    title="Close source editor"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="editor-status-bar">
+                                <div class="editor-status" id="editor-status" data-state="idle">
+                                    <span class="editor-status-indicator"></span>
+                                    <span id="editor-status-text">Idle</span>
+                                </div>
+                                <span class="editor-hint">Autosave after 800ms pause</span>
+                            </div>
+                            <div class="editor-panel">
+                                <textarea
+                                    id="editor-textarea"
+                                    class="editor-textarea"
+                                    spellcheck="false"
+                                    autocapitalize="off"
+                                    autocomplete="off"
+                                    autocorrect="off"
+                                    placeholder="Loading source..."
+                                ></textarea>
+                                <div class="editor-error" id="editor-error">
+                                    <div class="editor-error-title">Compile Error</div>
+                                    <pre class="editor-error-text" id="editor-error-text"></pre>
+                                </div>
+                            </div>
+                        </aside>
                     </div>
                 </div>
             </div>
@@ -1055,7 +1431,20 @@
         </div>
 
         <script>
-            // Theme management
+            const diagramPath = location.pathname.replace("/output/", "");
+            const sourceUrl = `/source/${diagramPath}`;
+            const sidebarFolderStateKey = "diagram-sidebar-folder-state";
+            const editorDrawerStateKey = "diagram-editor-open";
+            const editorState = {
+                loaded: false,
+                loading: false,
+                saving: false,
+                dirty: false,
+                lastSavedContent: "",
+                saveTimer: null,
+                activeRequestId: 0,
+            };
+
             function getPreferredTheme() {
                 const stored = localStorage.getItem("theme");
                 if (stored) return stored;
@@ -1089,8 +1478,6 @@
                     "light";
                 setTheme(current === "dark" ? "light" : "dark");
             }
-
-            const sidebarFolderStateKey = "diagram-sidebar-folder-state";
 
             function readSidebarFolderState() {
                 try {
@@ -1192,6 +1579,189 @@
                 );
             }
 
+            function isEditorDrawerOpen() {
+                return document.documentElement.classList.contains(
+                    "editor-drawer-open",
+                );
+            }
+
+            function setEditorDrawerOpen(open) {
+                document.documentElement.classList.toggle(
+                    "editor-drawer-open",
+                    open,
+                );
+                localStorage.setItem(editorDrawerStateKey, String(open));
+
+                if (open) {
+                    void ensureSourceLoaded();
+                }
+            }
+
+            function toggleEditorDrawer() {
+                setEditorDrawerOpen(!isEditorDrawerOpen());
+            }
+
+            function setEditorStatus(state, text) {
+                const status = document.getElementById("editor-status");
+                const label = document.getElementById("editor-status-text");
+                status.dataset.state = state;
+                label.textContent = text;
+            }
+
+            function showEditorError(message) {
+                const errorPanel = document.getElementById("editor-error");
+                const errorText = document.getElementById("editor-error-text");
+
+                if (!message) {
+                    errorPanel.classList.remove("visible");
+                    errorText.textContent = "";
+                    return;
+                }
+
+                errorText.textContent = message;
+                errorPanel.classList.add("visible");
+            }
+
+            async function ensureSourceLoaded() {
+                if (editorState.loaded || editorState.loading) {
+                    return;
+                }
+
+                editorState.loading = true;
+                const textarea = document.getElementById("editor-textarea");
+                const sourcePath = document.getElementById("editor-source-path");
+                textarea.disabled = true;
+                setEditorStatus("saving", "Loading");
+                showEditorError("");
+
+                try {
+                    const response = await fetch(sourceUrl, {
+                        headers: { Accept: "application/json" },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Unable to load source file");
+                    }
+
+                    const payload = await response.json();
+                    textarea.value = payload.content || "";
+                    textarea.placeholder = "Edit PlantUML source...";
+                    sourcePath.textContent = payload.sourcePath || "Unknown source";
+                    textarea.disabled = false;
+                    editorState.loaded = true;
+                    editorState.lastSavedContent = textarea.value;
+                    editorState.dirty = false;
+                    setEditorStatus("saved", "Saved");
+                    textarea.focus();
+                } catch (error) {
+                    sourcePath.textContent = "Source unavailable";
+                    textarea.disabled = true;
+                    setEditorStatus("failed", "Load failed");
+                    showEditorError(error.message || "Unable to load source");
+                } finally {
+                    editorState.loading = false;
+                }
+            }
+
+            function scheduleAutosave() {
+                if (!editorState.loaded) {
+                    return;
+                }
+
+                if (editorState.saveTimer) {
+                    clearTimeout(editorState.saveTimer);
+                }
+
+                editorState.saveTimer = setTimeout(() => {
+                    void saveSource();
+                }, 800);
+            }
+
+            async function saveSource() {
+                const textarea = document.getElementById("editor-textarea");
+                const content = textarea.value;
+
+                if (
+                    editorState.saving ||
+                    !editorState.loaded ||
+                    content === editorState.lastSavedContent
+                ) {
+                    return;
+                }
+
+                editorState.saving = true;
+                editorState.activeRequestId += 1;
+                const requestId = editorState.activeRequestId;
+                setEditorStatus("saving", "Saving...");
+
+                try {
+                    const response = await fetch(sourceUrl, {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Accept: "application/json",
+                        },
+                        body: JSON.stringify({ content }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Save request failed");
+                    }
+
+                    const payload = await response.json();
+                    if (requestId !== editorState.activeRequestId) {
+                        return;
+                    }
+
+                    editorState.lastSavedContent = content;
+                    editorState.dirty = false;
+                    document.getElementById("editor-source-path").textContent =
+                        payload.sourcePath || "Unknown source";
+
+                    if (payload.compileOk) {
+                        setEditorStatus("saved", "Saved");
+                        showEditorError("");
+                    } else {
+                        setEditorStatus("error", "Compile error");
+                        showEditorError(payload.message || "Compile failed");
+                    }
+                } catch (error) {
+                    if (requestId !== editorState.activeRequestId) {
+                        return;
+                    }
+
+                    editorState.dirty = true;
+                    setEditorStatus("failed", "Save failed");
+                    showEditorError(error.message || "Save failed");
+                } finally {
+                    if (requestId === editorState.activeRequestId) {
+                        editorState.saving = false;
+                    }
+                }
+            }
+
+            document
+                .getElementById("editor-textarea")
+                .addEventListener("input", (event) => {
+                    if (!editorState.loaded) {
+                        return;
+                    }
+
+                    editorState.dirty =
+                        event.target.value !== editorState.lastSavedContent;
+
+                    if (editorState.dirty) {
+                        setEditorStatus("dirty", "Unsaved");
+                        scheduleAutosave();
+                    } else {
+                        if (editorState.saveTimer) {
+                            clearTimeout(editorState.saveTimer);
+                            editorState.saveTimer = null;
+                        }
+                        setEditorStatus("saved", "Saved");
+                    }
+                });
+
             setTheme(getPreferredTheme());
             updateSidebarToggle(
                 document.documentElement.classList.contains(
@@ -1207,7 +1777,10 @@
                     }
                 });
 
-            // Zoom controls
+            if (isEditorDrawerOpen()) {
+                void ensureSourceLoaded();
+            }
+
             let currentZoom = 100;
             const zoomStep = 25;
             const minZoom = 25;
@@ -1253,9 +1826,8 @@
                 writeSidebarFolderState(state);
             }
 
-            // WebSocket connection
             const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-            const wsUrl = `${wsProtocol}//${location.host}/ws/${location.pathname.replace("/output/", "")}`;
+            const wsUrl = `${wsProtocol}//${location.host}/ws/${diagramPath}`;
             let ws;
             let reconnectAttempts = 0;
             const maxReconnectAttempts = 10;
@@ -1304,11 +1876,22 @@
             connect();
             syncSidebarFolderState();
 
-            // Keyboard shortcuts
             document.addEventListener("keydown", (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                    e.preventDefault();
+                    void saveSource();
+                }
                 if (e.key === "+" || e.key === "=") zoomIn();
                 if (e.key === "-") zoomOut();
                 if (e.key === "0") zoomReset();
+                if (
+                    e.key === "Escape" &&
+                    isEditorDrawerOpen() &&
+                    document.activeElement !==
+                        document.getElementById("editor-textarea")
+                ) {
+                    setEditorDrawerOpen(false);
+                }
             });
         </script>
     </body>

@@ -79,8 +79,7 @@ func main() {
 				continue
 			}
 
-			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
-			iw.ExecuteAndTrack(ctx, file, outputDir)
+			iw.RegenerateIfNeeded(ctx, file)
 		}
 		return nil
 	}, application.StartupTaskConfig{Name: "initial generation", AbortOnError: true})
@@ -90,6 +89,7 @@ func main() {
 	server.Handle("/output/{name...}", handlers.NewSvgViewHandler(config.OutputFolder, tmpls))
 	server.Handle("/ws/{name...}", handlers.NewSVGWSHandler(config.OutputFolder))
 	server.Handle("/download/{name...}", handlers.NewDownloadHandler(config.OutputFolder))
+	server.Handle("/source/{name...}", handlers.NewSourceHandler(iw))
 	server.Handle("/static/{file}", http.FileServer(http.FS(staticFiles)))
 	server.Handle("/", handlers.NewIndexHandler(config.OutputFolder, tmpls))
 
