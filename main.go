@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"embed"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mishankov/plantuml-watch-server/config"
@@ -66,21 +64,10 @@ func main() {
 		// Remove all stale outputs
 		os.RemoveAll(config.OutputFolder + "/")
 
-		// Generate initial SVGs - iterate through each file to preserve structure
-		inputPattern := config.InputFolder + "/**.puml"
-		files, err := filepath.Glob(inputPattern)
-		if err != nil {
-			return fmt.Errorf("Error finding .puml files: %w", err)
-		}
+		files := iw.GetPublicFiles(ctx)
 
 		for _, file := range files {
-			// Skip files prefixed with underscore
-			if strings.HasPrefix(filepath.Base(file), "_") {
-				continue
-			}
-
-			outputDir := calculateOutputDirForFile(ctx, file, config.InputFolder, config.OutputFolder)
-			iw.ExecuteAndTrack(ctx, file, outputDir)
+			iw.RenderPublicDiagram(ctx, file)
 		}
 		return nil
 	}, application.StartupTaskConfig{Name: "initial generation", AbortOnError: true})
